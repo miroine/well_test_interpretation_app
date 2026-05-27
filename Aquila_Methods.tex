@@ -1,0 +1,631 @@
+\documentclass[11pt,a4paper]{article}
+
+% =====================================================================
+%  Aquila — Technical Methods
+%  Compile with: pdflatex Aquila_Methods.tex (twice for references)
+% =====================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% \usepackage{lmodern}      % optional — uncomment if texlive-latex-extra installed
+% \usepackage{microtype}    % optional — uncomment if texlive-latex-extra installed
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm,bm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{xparse}
+
+% --------- Brand palette (mirrors the app) ---------
+\definecolor{aqdark}{HTML}{001E2B}
+\definecolor{aqred}{HTML}{FF1243}
+\definecolor{aqteal}{HTML}{00707F}
+\definecolor{aqgrey}{HTML}{5A5A5A}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=aqteal,
+    citecolor=aqteal,
+    urlcolor=aqteal,
+    pdftitle={Aquila — Methods},
+    pdfauthor={Merouane Hamdani},
+    pdfsubject={Pressure Transient Analysis},
+}
+
+% --------- Section formatting ---------
+\titleformat{\section}{\Large\bfseries\color{aqdark}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{aqdark}}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{aqteal}}{\thesubsubsection}{0.4em}{}
+
+% --------- Headers / footers ---------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textsc{\color{aqdark}Aquila}\,\textcolor{aqgrey}{·\,Methods}}
+\fancyhead[R]{\textcolor{aqgrey}{\thepage}}
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[L]{\scriptsize\textcolor{aqgrey}{© 2026 Merouane Hamdani · MIT License}}
+\fancyfoot[R]{\scriptsize\textcolor{aqgrey}{Not affiliated with Equinor ASA}}
+
+% --------- Common shortcuts ---------
+\newcommand{\R}{\mathrm{R}}
+\newcommand{\D}{\mathrm{d}}
+\newcommand{\pwf}{p_{\mathrm{wf}}}
+\newcommand{\pinit}{p_i}
+\newcommand{\Ein}{\mathrm{E}_1}
+\newcommand{\BU}{\mathrm{BU}}
+\newcommand{\mD}{\mathrm{mD}}
+\newcommand{\kh}{kh}
+\newcommand{\Ei}{\mathrm{Ei}}
+\newcommand{\mpres}{m(p)}
+
+% --------- Listings ---------
+\lstdefinestyle{aqcode}{
+    backgroundcolor=\color{black!4},
+    basicstyle=\ttfamily\footnotesize\color{aqdark},
+    keywordstyle=\color{aqred}\bfseries,
+    commentstyle=\color{aqgrey}\itshape,
+    stringstyle=\color{aqteal},
+    numbers=none,
+    frame=single,
+    framerule=0pt,
+    rulecolor=\color{black!10},
+    showstringspaces=false,
+    breaklines=true,
+    aboveskip=8pt,
+    belowskip=8pt,
+}
+\lstset{style=aqcode,language=Python}
+
+% --------- Symbol table macro ---------
+\NewDocumentEnvironment{symbols}{}
+{\par\begin{tabular}{@{}p{0.10\textwidth}p{0.20\textwidth}p{0.66\textwidth}@{}}
+\textbf{Symbol} & \textbf{Units} & \textbf{Meaning} \\ \midrule
+}
+{\end{tabular}\par\vspace{0.5em}}
+
+% =====================================================================
+\begin{document}
+
+% --------- Title page ---------
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\Huge\bfseries\color{aqdark} Aquila}\\[6pt]
+\textcolor{aqred}{\rule{8cm}{2pt}}\\[10pt]
+{\large\color{aqteal} Pressure Transient Analysis\,---\,Technical Methods}\\
+\vspace{1.5cm}
+{\large\color{aqdark} Merouane Hamdani}\\[4pt]
+{\small\color{aqgrey} Author}\\
+\vspace{2.5cm}
+\begin{minipage}{0.8\textwidth}
+\itshape\color{aqgrey}
+This document specifies the analytical and numerical methods used by the
+Aquila pressure-transient analysis workbench. Every formula in the
+engine is referenced to its source, its dimensional form is given in
+oilfield units (the engine's canonical internal representation), and its
+validation status is stated. The document is intended for review by
+petroleum-engineering subject-matter experts and as a reference companion
+to the source code.
+\end{minipage}
+\vspace{1.5cm}
+
+\begin{minipage}{0.8\textwidth}
+\centering\footnotesize\color{aqgrey}
+\textcolor{aqred}{\rule{4cm}{0.5pt}}\\[6pt]
+\textbf{\color{aqdark}Disclaimer}\,\,---\,Aquila is provided \emph{as~is}, without
+warranty of any kind. Outputs assist, not replace, the work of a
+qualified petroleum engineer. The visual identity is \emph{inspired by}
+publicly-visible corporate design conventions; the project is not produced
+by, nor affiliated with, Equinor~ASA, and the Equinor name, logo and
+wordmark are not used.
+\end{minipage}
+
+\vfill
+{\large\bfseries Version 1.0}\\[6pt]
+{\color{aqgrey}\today\,---\,Licensed under MIT}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Notation and units}
+\label{sec:notation}
+
+The Aquila engine works internally in \emph{oilfield} units throughout.
+Unit conversion happens only at the user-interface boundary
+(\texttt{modules/units.py}). This keeps every formula in the engine in a
+single consistent unit system and removes any risk of constant
+mis-translation across the codebase.
+
+\begin{symbols}
+$k$         & mD             & permeability \\
+$h$         & ft             & net pay (formation thickness) \\
+$\phi$      & ---            & porosity (fraction) \\
+$\mu$       & cp             & viscosity \\
+$B$         & rb/STB or rb/Mscf & formation volume factor \\
+$c_t$       & psi$^{-1}$     & total compressibility \\
+$q$         & STB/D or Mscf/D & surface flow rate \\
+$\Delta P$  & psi            & pressure drawdown $p_i - \pwf$ \\
+$\Delta t$  & hr             & elapsed time \\
+$r_w$       & ft             & wellbore radius \\
+$r_e$       & ft             & drainage radius \\
+$s$         & ---            & mechanical skin (dimensionless) \\
+$C$         & bbl/psi        & wellbore-storage coefficient \\
+$p_i$       & psia           & initial reservoir pressure \\
+$T_R$       & $^\circ$R      & reservoir temperature (gas) \\
+$\gamma_g$  & ---            & gas specific gravity (air = 1) \\
+$Z$         & ---            & gas Z-factor (real-gas deviation) \\
+$\mpres$       & psi$^2$/cp     & gas pseudo-pressure \\
+$t_a$       & psi$\cdot$hr/cp & gas pseudo-time \\
+\end{symbols}
+
+% =====================================================================
+\section{The radial diffusivity equation}
+\label{sec:diffeq}
+
+Aquila is built on the radial slightly-compressible-fluid diffusivity
+equation in a single homogeneous layer:
+\begin{equation}
+    \frac{1}{r}\frac{\partial}{\partial r}\!\left(r\,\frac{\partial p}{\partial r}\right)
+    = \frac{\phi \mu c_t}{k}\,\frac{\partial p}{\partial t}.
+    \label{eq:diff}
+\end{equation}
+
+The \emph{line-source} solution to (\ref{eq:diff}) with constant-rate
+inner-boundary condition and an infinite-acting outer boundary gives, at
+the wellbore,
+\begin{equation}
+    \Delta P(t)
+    \;=\;
+    \frac{141.2\,q\,B\,\mu}{\kh}
+    \left[
+        \tfrac{1}{2}\,\Ein\!\!\left(\frac{x}{1}\right) + s
+    \right],
+    \qquad
+    x = \frac{948\,\phi\,\mu\,c_t\,r_w^{\,2}}{k\,t},
+    \label{eq:linesrc}
+\end{equation}
+where $\Ein(x)\equiv -\Ei(-x)=\int_x^\infty\!e^{-u}/u\;\D u$ is the
+exponential integral. In the late-time (small-$x$) limit, $\Ein(x)\to
+-\ln x - \gamma_{\mathrm{E}}$ where $\gamma_{\mathrm{E}}\approx 0.5772$
+is the Euler--Mascheroni constant. This produces the famous
+\emph{semilog approximation}:
+\begin{equation}
+    \Delta P(t) \approx
+    \frac{162.6\,q\,B\,\mu}{\kh}
+    \!\left[
+        \log_{10} t + \log_{10}\!\left(\frac{k}{\phi\mu c_t r_w^{\,2}}\right)
+        - 3.23 + \tfrac{1}{1.151}\,s
+    \right].
+    \label{eq:semilog}
+\end{equation}
+The slope of $\Delta P$ versus $\log_{10}t$ on this plot,
+$m \equiv 162.6\,qB\mu/(\kh)$, is the foundation of conventional
+infinite-acting radial-flow (IARF) interpretation.
+
+\paragraph{Bourdet derivative.}
+The Bourdet (1989) derivative is
+\begin{equation}
+    \frac{\partial \Delta P}{\partial \ln t}
+    \;=\;
+    t\,\frac{\D \Delta P}{\D t}.
+    \label{eq:bourdet}
+\end{equation}
+Under IARF, (\ref{eq:semilog}) gives
+$t\,\D\Delta P/\D t = m/\ln 10$, so the derivative is a \emph{flat
+plateau} on a log-log plot. Departures from this plateau diagnose
+non-IARF flow regimes: wellbore storage, linear flow, pseudo-steady-state
+(closed-boundary), double-porosity transitions, layered behaviour, and
+so on. Aquila computes the derivative with a vectorised three-point
+log-time-window scheme:
+\begin{equation}
+    \left(t\,\frac{\D \Delta P}{\D t}\right)_{\!i}
+    \;=\;
+    \frac{
+        \Delta P_R\,\ln\!\tfrac{t_i}{t_L} - \Delta P_L\,\ln\!\tfrac{t_R}{t_i}
+    }{
+        \ln\!\tfrac{t_R}{t_i} \cdot \ln\!\tfrac{t_i}{t_L}
+    }
+    \cdot
+    \frac{1}{\ln\!\tfrac{t_R}{t_L}},
+\end{equation}
+where $t_L,\,t_R$ are the times within a log-window of half-width $L$
+to the left and right of $t_i$ (default $L=0.1$). The implementation is
+fully vectorised via \texttt{np.searchsorted} and is bit-identical to a
+naive loop but $\sim$1000$\times$ faster on a 6000-point trace.
+
+% =====================================================================
+\section{Wellbore storage — Fair--Schulz model}
+\label{sec:wbs}
+
+Wellbore storage (WBS) dominates the early-time response. Pure WBS
+gives $\Delta P_\text{WBS} = (qB/24C)\,t$ — a unit-slope ramp on
+log-log. Aquila uses the \textbf{Fair--Schulz} smooth transition between
+pure WBS and the line-source solution:
+\begin{equation}
+    \Delta P(t) = \underbrace{w(t)}_{\text{weight}}\,\Delta P_\text{res}(t)
+                + \bigl[1-w(t)\bigr]\,\Delta P_\text{WBS}(t),
+    \qquad
+    w(t) = 1 - \exp\!\left[-(t/\tau)^2\right],
+\end{equation}
+with characteristic time $\tau = 200\,C/(kh)$. The transition smoothly
+matches the unit-slope WBS region at early times to the line-source
+formation response at late times, and is differentiable so the
+Bourdet derivative remains smooth across the join.
+
+The rule-of-thumb \emph{clearance time} — after which the formation
+response dominates — is
+\begin{equation}
+    t_\text{clear} \;\approx\; (200\,000 + 12\,000\,s)\,\frac{C}{\kh/\mu}
+    \qquad [\mathrm{hr}].
+\end{equation}
+Aquila displays a warning when the planned test duration is less than
+$1.5\,t_\text{clear}$.
+
+% =====================================================================
+\section{Regression for IARF — solving for $k$ and $s$}
+\label{sec:regress-radial}
+
+In a clean IARF window, the geometric mean of the Bourdet derivative
+yields the plateau, from which $k$ follows directly:
+\begin{align}
+    \text{plateau} &= \exp\!\left[\,\overline{\ln(t\,\D\Delta P/\D t)}\,\right], \\
+    m              &= \ln(10)\cdot\text{plateau} \qquad [\mathrm{psi/cycle}], \\
+    k              &= \frac{162.6\,q\,B\,\mu}{m\,h}.
+\end{align}
+
+Skin is recovered using the value of $\Delta P$ at $\Delta t = 1$ hr in
+the buildup. The standard Horner formula is
+\begin{equation}
+    s \;=\; 1.151\!\left[
+        \frac{\Delta P_{1\mathrm{hr}}}{m}
+        \;-\;
+        \log_{10}\!\left(\frac{k}{\phi\mu c_t r_w^{\,2}}\right)
+        \;+\;
+        3.23
+    \right].
+    \label{eq:skin-horner}
+\end{equation}
+
+\paragraph{Quality flag — plateau flatness.}
+The geometric standard deviation of $t\,\D\Delta P/\D t$ within the
+chosen regression window is reported:
+\begin{equation}
+    f \;=\; \exp\!\left[\sigma\!\left(\ln(t\,\D\Delta P/\D t)\right)\right]
+\end{equation}
+Values $f<1.15$ indicate a clean plateau; $f<1.40$ is borderline;
+$f\geq 1.40$ indicates the window crosses a regime transition and the
+fit is suspect. The UI surfaces this directly to discourage the user
+from picking a window that includes wellbore storage or a boundary.
+
+% =====================================================================
+\section{Linear flow (fractured wells)}
+\label{sec:linear}
+
+For a vertical well intersecting an infinite-conductivity fracture, the
+early-time response is \emph{linear flow} into the fracture, with
+\begin{equation}
+    \Delta P(t) = m_L \sqrt{t},
+    \qquad
+    x_f\sqrt{k} \;=\; \frac{4.064\,q\,B}{m_L\,h}\sqrt{\frac{\mu}{\phi c_t}},
+\end{equation}
+where $x_f$ is the fracture half-length. On the Bourdet derivative,
+linear flow appears as a \emph{half-slope} line on log-log.
+
+For a gas well, the equivalent pseudo-pressure formulation is
+\begin{equation}
+    \Delta \mpres(t) = m_L \sqrt{t},
+    \qquad
+    x_f\sqrt{k} \;=\; \frac{40.92\,q_g\,T_R}{m_L\,h}\sqrt{\frac{1}{\phi\,\mu_\text{ref}\,c_{t,\text{ref}}}}.
+\end{equation}
+
+% =====================================================================
+\section{Closed-boundary (pseudo-steady-state, PSS)}
+\label{sec:pss}
+
+After a well has drained out to a no-flow boundary, the pressure decline
+is uniform across the drainage area — \emph{pseudo-steady-state}. On
+Cartesian axes, $\Delta P$ becomes a straight line in $t$:
+\begin{equation}
+    \frac{\D\Delta P}{\D t} = m^\ast = \frac{0.234\,q\,B}{\phi c_t h\,A},
+    \qquad
+    A = \pi r_e^{\,2}.
+\end{equation}
+On a log-log Bourdet derivative, PSS appears as a \emph{unit-slope}
+rising line at late time. Aquila's \texttt{regress\_pss} extracts
+$m^\ast$ by linear regression in real time and reports the drainage
+area, equivalent drainage radius $r_e = \sqrt{A/\pi}$, and pore
+volume:
+\begin{equation}
+    V_p = A\,h\,\phi \;[\mathrm{ft}^3]
+          \quad\Longleftrightarrow\quad
+          V_p \,[\mathrm{bbl}] = V_p\,[\mathrm{ft}^3]/5.615.
+\end{equation}
+For gas wells, the slope and area formulae use the pseudo-pressure form
+with constant $2.356\times 10^6$ in place of $0.234$.
+
+% =====================================================================
+\section{Gas-well analysis}
+\label{sec:gas}
+
+For gas, the diffusivity equation is non-linear because $\mu$, $Z$, and
+$c_g$ all depend on pressure. The standard remedy is the Al-Hussainy /
+Ramey transformation to \emph{pseudo-pressure}:
+\begin{equation}
+    \mpres \;=\; 2\!\int_0^p \frac{p'\,\D p'}{\mu(p')\,Z(p')}.
+    \label{eq:mp}
+\end{equation}
+In the variable $\mpres$, the gas diffusivity equation is linear and has
+exactly the same form as (\ref{eq:diff}). Hence every analytical
+solution carries over with the substitution $\Delta P \to \Delta\mpres$ and
+a different slope constant:
+\begin{equation}
+    \Delta\mpres(t) = \frac{1422\,q_g\,T_R}{\kh}\!\left[\tfrac{1}{2}\Ein(x) + s\right],
+    \qquad
+    m_g \equiv \frac{1637\,q_g\,T_R}{\kh}.
+\end{equation}
+
+For drawdown and buildup tests, time is also transformed:
+\begin{equation}
+    t_a \;=\; \frac{t}{\mu(\bar p)\,c_t(\bar p)}
+\end{equation}
+evaluated at the average reservoir pressure $\bar p$
+(Agarwal approximation, accurate for buildup analysis when the pressure
+swing is small).
+
+\subsection{PVT correlations}
+
+Aquila implements four standard correlations covering the practical
+$0.55 < \gamma_g < 1.7$, $1.0 < T_{pr} < 3.0$, $0.2 < P_{pr} < 30$ range:
+
+\paragraph{Pseudo-criticals — Sutton (1985).}
+\begin{align}
+    P_{pc} &= 756.8 - 131.0\,\gamma_g - 3.6\,\gamma_g^{\,2}, \\
+    T_{pc} &= 169.2 + 349.5\,\gamma_g - 74.0\,\gamma_g^{\,2}.
+\end{align}
+
+\paragraph{Acid-gas correction — Wichert--Aziz (1972).}
+For mole fractions $y_{\mathrm{CO}_2}$ and $y_{\mathrm{H}_2\mathrm{S}}$:
+\begin{align}
+    A &= y_{\mathrm{H}_2\mathrm{S}} + y_{\mathrm{CO}_2},\quad
+    B  = y_{\mathrm{H}_2\mathrm{S}}, \\
+    \varepsilon &= 120\,(A^{0.9}-A^{1.6}) + 15\,(B^{0.5}-B^4), \\
+    T_{pc}^\prime &= T_{pc} - \varepsilon, \\
+    P_{pc}^\prime &= \frac{P_{pc}\,T_{pc}^\prime}{T_{pc} + B(1-B)\varepsilon}.
+\end{align}
+
+\paragraph{Z-factor — Dranchuk--Abou-Kassem (1975).}
+\begin{equation}
+    Z \;=\; 1 + c_1\rho_r + c_2\rho_r^{\,2} - c_3\rho_r^{\,5}
+            + c_4\bigl(1+A_{11}\rho_r^{\,2}\bigr)\frac{\rho_r^{\,2}}{T_{pr}^{\,3}}\exp(-A_{11}\rho_r^{\,2}),
+\end{equation}
+with $\rho_r = 0.27\,P_{pr}/(Z\,T_{pr})$ and DAK coefficients
+$A_1\ldots A_{11}$ as in the 1975 paper. The eleven $A_i$ are
+$[0.3265,\, -1.0700,\, -0.5339,\, 0.01569,\, -0.05165,\, 0.5475,\,
+-0.7361,\, 0.1844,\, 0.1056,\, 0.6134,\, 0.7210]$. The implicit
+relation in $\rho_r$ is solved by bracketed bisection.
+
+\paragraph{Viscosity — Lee--Gonzalez--Eakin (1966).}
+\begin{align}
+    M_g &= 28.96\,\gamma_g \qquad [\text{lbm/lbmol}], \\
+    K  &= \frac{(9.4 + 0.02 M_g)\,T_R^{1.5}}{209 + 19 M_g + T_R}, \\
+    X  &= 3.5 + \frac{986}{T_R} + 0.01 M_g,\qquad
+    Y   = 2.4 - 0.2 X, \\
+    \mu_g &= 10^{-4}\,K\,\exp\!\bigl(X\,\rho_g^{\,Y}\bigr) \qquad [\mathrm{cp}],
+\end{align}
+with the gas density $\rho_g$ in g/cm$^3$ converted from
+$\rho_g [\mathrm{lbm/ft^3}] = p M_g/(Z\,R\,T_R)$, $R = 10.7316$
+psi$\cdot$ft$^3$/(lbmol$\cdot^\circ$R).
+
+\paragraph{Compressibility and FVF.}
+\begin{equation}
+    c_g \;=\; \frac{1}{p} - \frac{1}{Z}\!\left(\frac{\partial Z}{\partial p}\right)_T,
+    \qquad
+    B_g \;=\; 5.0287\,\frac{Z\,T_R}{p} \qquad [\mathrm{rb/Mscf}].
+\end{equation}
+The $\partial Z/\partial p$ derivative is computed numerically with a
+$10^{-4}$ relative step.
+
+\subsection{Validation status}
+
+\begin{tabular}{lll}
+\toprule
+\textbf{Correlation} & \textbf{Test point} & \textbf{Result} \\
+\midrule
+Sutton           & $\gamma_g=0.65$                  & $P_{pc}=670$, $T_{pc}=365^\circ$R (matches paper) \\
+Wichert--Aziz    & $\gamma_g=0.7$, $5\%$CO$_2$+$10\%$H$_2$S & $\Delta T_{pc}=20.7^\circ$R \\
+DAK              & Standing--Katz, 8 points         & 7/8 within $\pm$0.05 \\
+LGE              & $p=2000$ psia, $T=200^\circ$F    & $\mu_g=0.0168$ cp (in $0.014$--$0.020$ band) \\
+$\mpres$            & monotonicity test                & strictly increasing $\checkmark$ \\
+Forward $\to$ inverse $k$ & three skin cases       & $k$ recovered to $\le 0.05\,\%$ \\
+\bottomrule
+\end{tabular}
+
+% =====================================================================
+\section{Multi-layer reservoirs}
+\label{sec:layered}
+
+\subsection{Commingled layers (no crossflow)}
+
+Two (or more) layers produce into the same wellbore but do \emph{not}
+communicate vertically. Under the constraint of equal wellbore pressure
+and fixed total surface rate, the per-layer pressure responses combine
+by \emph{parallel admittance}:
+\begin{equation}
+    \Delta P_\text{well}(t) =
+    \frac{q_\text{total}}{\sum_i Y_i(t)},
+    \qquad
+    Y_i(t) = \frac{k_i h_i}{141.2\,B\,\mu \cdot g_i(t)},
+\end{equation}
+where $g_i(t) = \tfrac{1}{2}\Ein(x_i(t)) + s_i$ is the dimensionless
+line-source contribution of layer $i$ evaluated at time $t$.
+
+\paragraph{Identifiable parameters.}
+From a single buildup, one can identify $\kh_\text{total}$ and the
+\emph{flow-capacity ratio}
+$\kappa = k_1 h_1 / \kh_\text{total}$, but the $(k_i, h_i)$ pair
+separately is non-unique without independent rate-allocation data (e.g.\
+production logging tools). Aquila surfaces this limitation explicitly in
+the inverse-fit output.
+
+\paragraph{Signature on the Bourdet derivative.}
+\begin{itemize}[noitemsep]
+    \item Early time: the fastest-responding layer dominates the
+          derivative plateau (the high-$k$, low-storage layer).
+    \item Late time: the derivative drops to the plateau corresponding
+          to the system total $\kh$.
+    \item Transition: a downward \emph{step} in the derivative — the
+          qualitative fingerprint of commingled flow without crossflow.
+\end{itemize}
+
+\subsection{Double permeability with crossflow}
+
+\textcolor{aqgrey}{Pending verification against published reference
+type-curves. The numerical Laplace-inversion infrastructure (Stehfest
+1970, validated to 0.30\,\% on the $K_0(\sqrt{s})/s$ radial-diffusion
+benchmark) is in place under \texttt{modules/laplace.py}. What remains
+is the Laplace-space transfer function $f(s;\kappa,\omega,\lambda)$ from
+Bourdet (1985) SPE 13628, which will be added once an authoritative
+reference is available for cross-validation.}
+
+% =====================================================================
+\section{Numerical Laplace inversion (Stehfest)}
+\label{sec:stehfest}
+
+Several PTA solutions (notably double-permeability with crossflow,
+double-porosity, and bounded reservoirs with non-trivial outer
+geometries) are most naturally expressed in Laplace space. Aquila
+implements the Stehfest (1970) algorithm:
+\begin{equation}
+    f(t) \;\approx\;
+    \frac{\ln 2}{t}\,\sum_{i=1}^{N} V_i\,\bar F\!\left(\frac{i\ln 2}{t}\right),
+\end{equation}
+with weights
+\begin{equation}
+    V_i = (-1)^{N/2+i} \!\!\!
+    \sum_{k=\lfloor(i+1)/2\rfloor}^{\min(i,N/2)}
+    \frac{k^{N/2}\,(2k)!}{(N/2-k)!\,k!\,(k-1)!\,(i-k)!\,(2k-i)!}.
+\end{equation}
+Aquila uses $N=8$ by default — sufficient for the smooth monotone
+transforms typical of radial PTA, while avoiding the catastrophic
+cancellation that affects $N=14$+ on exponentially-decaying functions
+in double precision.
+
+\paragraph{Validation.}
+Stehfest is validated against five known Laplace pairs (Table~\ref{tab:stehfest}).
+
+\begin{table}[h]
+\centering
+\caption{Stehfest inversion accuracy on benchmark transforms (max relative error over the indicated $t$-range).}
+\label{tab:stehfest}
+\begin{tabular}{lll}
+\toprule
+\textbf{Transform $\bar F(s)$} & \textbf{Inverse $f(t)$} & \textbf{Max error} \\
+\midrule
+$1/s^2$              & $t$                            & $1.5\times10^{-4}$ \\
+$\sqrt{\pi}/(2s^{3/2})$ & $\sqrt{t}$                   & $1.7\times10^{-5}$ \\
+$1/(s+a)$            & $e^{-at}$ (N=12)              & $2.0\times10^{-3}$ \\
+$\omega/(s^2+\omega^2)$ & $\sin(\omega t)$ (N=12)    & $5.0\times10^{-2}$ \\
+$K_0(\sqrt s)/s$    & $\tfrac{1}{2}\Ein\!\left(\tfrac{1}{4t}\right)$ & $3.0\times10^{-3}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Uncertainty quantification}
+\label{sec:uncertainty}
+
+Aquila propagates input uncertainty on $h$ and $\mu$ (oil) or $h$ alone
+(gas — viscosity is PVT-derived) to the permeability estimate via
+Monte-Carlo sampling of triangular distributions. For each iteration
+$i$:
+\begin{equation}
+    k_i = \begin{cases}
+        \dfrac{162.6\,q\,B\,\mu_i}{m\,h_i} & \text{oil/water,} \\[1ex]
+        \dfrac{1637\,q\,T_R}{m_g\,h_i}      & \text{gas.}
+    \end{cases}
+\end{equation}
+The sample yields the petroleum-convention percentiles
+\textbf{P90 / P50 / P10} (low/best/high), a kernel-density-estimated
+PDF, the empirical CDF, and a Spearman-rank-correlation tornado
+sensitivity chart ranking the relative impact of each uncertain
+input.
+
+% =====================================================================
+\section{Engine architecture}
+\label{sec:arch}
+
+\begin{lstlisting}[caption={Aquila module layout.}]
+aquila/
+├── app.py                    # Streamlit UI (orchestrator only)
+├── styles.py                 # Theming, CSS, Plotly layout
+├── assets/
+│   ├── aquila_logo.svg       # Full logo (400x120)
+│   └── aquila_icon.svg       # Square favicon (100x100)
+└── modules/                  # Math layer — UI-independent
+    ├── engine.py             # Line-source, Fair-Schulz, Bourdet,
+    │                         #   regression (radial/linear/PSS).
+    ├── pvt.py                # DAK Z, LGE mu, Sutton+Wichert-Aziz,
+    │                         #   m(p) and t_a.
+    ├── layered.py            # Commingled (no crossflow);
+    │                         #   double-perm stub.
+    ├── laplace.py            # Stehfest numerical inverter.
+    ├── economics.py          # Cost & deferred-revenue calculator.
+    ├── uncertainty.py        # Monte Carlo + KDE/CDF + tornado.
+    ├── units.py              # Field <-> SI exact conversions.
+    └── reporter.py           # FPDF report builder.
+\end{lstlisting}
+
+The math layer never imports Streamlit. Every module is independently
+unit-testable and reusable from a notebook or batch pipeline.
+
+% =====================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+\small
+
+\noindent\textbf{Pressure transient analysis}\par
+\begin{itemize}[leftmargin=*,nosep]
+\item Bourdet, D. (1989). \emph{Use of Pressure Derivative in Well-Test Interpretation}. SPE 12777.
+\item Earlougher, R.C. (1977). \emph{Advances in Well Test Analysis}, SPE Monograph 5.
+\item Lee, J., Rollins, J.B., \& Spivey, J.P. (2003). \emph{Pressure Transient Testing}, SPE Textbook Series.
+\item Horne, R.N. (1995). \emph{Modern Well Test Analysis: A Computer-Aided Approach}, 2nd ed.
+\end{itemize}
+
+\noindent\textbf{Gas-well analysis}\par
+\begin{itemize}[leftmargin=*,nosep]
+\item Al-Hussainy, R., Ramey, H.J., \& Crawford, P.B. (1966). The flow of real gases through porous media. \emph{JPT}.
+\item Agarwal, R.G. (1979). ``Real gas pseudo-time'' — a new function for pressure buildup analysis of MHF gas wells. SPE 8279.
+\item Lee, W.J., \& Wattenbarger, R.A. (1996). \emph{Gas Reservoir Engineering}, SPE Textbook Series.
+\end{itemize}
+
+\noindent\textbf{PVT correlations}\par
+\begin{itemize}[leftmargin=*,nosep]
+\item Dranchuk, P.M., \& Abou-Kassem, J.H. (1975). Calculation of Z factors for natural gases using equations of state. \emph{JCPT}.
+\item Lee, A.L., Gonzalez, M.H., \& Eakin, B.E. (1966). The viscosity of natural gases. \emph{JPT}.
+\item Sutton, R.P. (1985). Compressibility factors for high-molecular-weight reservoir gases. SPE 14265.
+\item Wichert, E., \& Aziz, K. (1972). Calculation of $Z$'s for sour gases. \emph{Hydrocarbon Processing}.
+\end{itemize}
+
+\noindent\textbf{Layered reservoirs}\par
+\begin{itemize}[leftmargin=*,nosep]
+\item Bourdet, D. (1985). Pressure behavior of layered reservoirs with crossflow. SPE 13628.
+\item Larsen, L. (1981). Wells producing commingled zones with unequal initial pressures and reservoir properties. SPE 10325.
+\end{itemize}
+
+\noindent\textbf{Numerical methods}\par
+\begin{itemize}[leftmargin=*,nosep]
+\item Stehfest, H. (1970). Algorithm 368: Numerical inversion of Laplace transforms. \emph{Commun.\ ACM} 13(1):47--49.
+\item Bourdet, D., Ayoub, J.A., \& Pirard, Y.M. (1989). Use of pressure derivative in well-test interpretation. \emph{SPE Form.\ Eval.}\ 4(2):293--302.
+\end{itemize}
+
+\end{document}

@@ -1,0 +1,69 @@
+MIT License
+
+Copyright (c) 2026 Merouane Hamdani
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+ADDITIONAL ENGINEERING-USE DISCLAIMER
+================================================================================
+
+Aquila is a software tool for pressure-transient analysis (PTA), provided
+for educational, research, and engineering-decision-support purposes. The
+analytical methods, correlations, and inversion routines implemented here
+are documented in `docs/Aquila_Methods.pdf` and reference the peer-reviewed
+petroleum-engineering literature.
+
+The user acknowledges that:
+
+  1. Real well-test interpretation requires qualified human judgment.
+     Outputs from this tool are intended to assist, not replace, the work
+     of a competent petroleum engineer.
+
+  2. The PVT correlations (DAK, LGE, Sutton, Wichert-Aziz) and the layered-
+     reservoir models are valid only within their published ranges of
+     applicability. Use outside those ranges may produce non-physical
+     results.
+
+  3. No representation is made about the suitability of this software for
+     any specific operational, regulatory, or commercial decision. The
+     author bears no liability for decisions made on the basis of its
+     output.
+
+  4. The match between simulated and observed responses is necessary but
+     not sufficient evidence of correctness; alternative interpretations
+     consistent with the same data may exist.
+
+================================================================================
+TRADEMARK AND AFFILIATION NOTICE
+================================================================================
+
+This software's visual identity (colour palette, typography, layout
+conventions) is INSPIRED BY the publicly-available corporate-design
+language of Equinor ASA, including the use of deep-sea blue and red
+accent colours and sans-serif typography.
+
+Aquila IS NOT a product of Equinor ASA. The author is not affiliated with,
+endorsed by, or sponsored by Equinor ASA. The Equinor name, logo, and
+wordmark are NOT used in this software. Any resemblance to Equinor
+products is for aesthetic purposes only and conveys no endorsement or
+commercial relationship.
+
+All trademarks, registered or unregistered, remain the property of their
+respective owners.
