@@ -38,7 +38,7 @@ from styles import (
     inject_css, banner_html, get_plotly_layout,
     COLOR_RED, COLOR_DARK, COLOR_TEAL, COLOR_WHITE,
 )
-from modules.engine import (
+from engine import (
     WellInputs, simulate_drawdown, wbs_clearance_time, fair_schulz_transition,
     decimate, detect_flow_periods, build_buildup_derivatives,
     regress_radial, regress_linear,
@@ -50,14 +50,14 @@ from modules.engine import (
     # Model-vs-data helpers
     horner_time, line_source_dp,
 )
-from modules.pvt import GasPVT, build_pvt_table, pseudo_pressure_table, pseudo_pressure
-from modules.layered import (
+from pvt import GasPVT, build_pvt_table, pseudo_pressure_table, pseudo_pressure
+from layered import (
     CommingledInputs, simulate_commingled, fit_commingled_2layer,
 )
-from modules.economics import EconomicsInputs, compute_costs
-from modules.uncertainty import run_monte_carlo, kde_curve, cdf_curve
-from modules.reporter import build_report
-from modules.units import (
+from economics import EconomicsInputs, compute_costs
+from uncertainty import run_monte_carlo, kde_curve, cdf_curve
+from reporter import build_report
+from units import (
     UnitSystem, to_field, from_field, label, fmt, axis_title,
     temperature_to_F, temperature_from_F,
 )
@@ -124,7 +124,7 @@ def cached_read_csv(file_bytes: bytes, system: str) -> pd.DataFrame:
               .reset_index(drop=True))
 
     # Vectorized field-unit conversion using factor lookup
-    from modules.units import _TABLE  # internal but stable
+    from units import _TABLE  # internal but stable
     if system == UnitSystem.FIELD.value:
         tf_t = tf_p = tf_r = 1.0
     else:
@@ -782,6 +782,9 @@ with tab_design:
             df_l = simulate_commingled(to_field(l_dur, "time", U), 500, l_ci,
                                        fluid="gas", T_R=pvt_table["T_R"])
             ycol, dcol = "dm", "tdmdt"
+            analysis_qty = "pseudo_pressure"
+            analysis_factor = from_field(1.0, "pseudo_pressure", U)
+            analysis_label = "Δm(p), t·dm/dt"
         else:
             l_ci = CommingledInputs(
                 k=[to_field(l_k1, "permeability", U), to_field(l_k2, "permeability", U)],
@@ -796,6 +799,9 @@ with tab_design:
             df_l = simulate_commingled(to_field(l_dur, "time", U), 500, l_ci,
                                        fluid="oil")
             ycol, dcol = "dp", "tdp_dt"
+            analysis_qty = "delta_pressure"
+            analysis_factor = from_field(1.0, "delta_pressure", U)
+            analysis_label = "ΔP, t·dP/dt"
 
         # Summary metrics
         kh1_disp = l_k1 * l_h1
@@ -1641,7 +1647,7 @@ with tab_interp:
             layout = get_plotly_layout("")
             layout.pop("title", None)        # subplots provide their own titles
             fig4.update_layout(
-                **{k: v for k, v in layout.items() if k not in ("xaxis", "yaxis")},
+                **{k: v for k, v in layout.items() if k not in ("xaxis", "yaxis", "legend")},
                 height=720,
                 showlegend=True,
                 legend=dict(orientation="h", yanchor="bottom", y=1.06, xanchor="left", x=0),
@@ -1917,7 +1923,7 @@ with tab_uncert:
         #  Bars: median k restricted to the bottom-decile (low_k) vs top-decile
         #  (high_k) of each input. Annotations show the Spearman rank correlation.
         # ====================================================================
-        from modules.uncertainty import tornado_swings
+        from uncertainty import tornado_swings
         # Inputs are in field units; convert to user system for axis display
         h_factor   = from_field(1.0, "height",    U)
         mu_factor  = from_field(1.0, "viscosity", U)

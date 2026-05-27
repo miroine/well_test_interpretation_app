@@ -533,7 +533,7 @@ def simulate_gas_drawdown(duration_hr: float, n_points: int,
         dm      Δm(p) [psi²/cp]
         tdmdt   t · dm/dt   (Bourdet derivative on pseudo-pressure)
     """
-    from modules.pvt import pseudo_pressure_table, pseudo_pressure
+    from pvt import pseudo_pressure_table, pseudo_pressure
 
     # Pseudo-pressure table for the chosen PVT
     p_tab, m_tab = pseudo_pressure_table(pvt_table)

@@ -49,7 +49,7 @@ from dataclasses import dataclass
 from scipy.special import exp1
 from scipy.optimize import minimize
 
-from modules.engine import (
+from engine import (
     LINESRC_CONST, GAS_LINESRC_CONST,
     bourdet_derivative,
 )
