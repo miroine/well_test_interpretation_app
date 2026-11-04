@@ -113,8 +113,14 @@ def interpretation_response(dataset, responses, system):
     ylabel = ("Normalized pseudo-pressure" if pseudo else "Pressure") + f" [{U.label('pressure', system)}]"
     fig = _base("Pressure and rate: data and model", "Elapsed test time [hr]", ylabel,
                 xlog=False, ylog=False, height=500)
-    fig.add_trace(go.Scatter(x=history["t"], y=U.from_field(history["p"], "pressure", system),
-                             mode="markers", name="Original pressure data",
+    keep = np.ones(len(history["t"]), dtype=bool)
+    if dataset.get("qc_source") is not None:
+        keep[np.asarray(dataset.get("qc_excluded", []), int)] = False
+        window = dataset.get("qc_window")
+        if window:
+            keep &= (history["t"] >= window[0]) & (history["t"] <= window[1])
+    fig.add_trace(go.Scatter(x=history["t"][keep], y=U.from_field(history["p"][keep], "pressure", system),
+                             mode="markers", name="Kept pressure data",
                              marker=dict(color=GREY, size=4)))
     fig.add_trace(go.Scatter(x=dataset["tp"] + np.asarray(dataset["dt"]),
                              y=U.from_field(np.asarray(dataset["pws"]), "pressure", system),

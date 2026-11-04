@@ -14,6 +14,60 @@ use $\log_{10}$. Pressure is absolute unless explicitly labelled as a change.
 
 ### 1. Workflow and units
 
+**Combined well/reservoir physics:** select Infinite-conductivity fracture +
+dual porosity (pseudo-steady) when both fracture geometry and Warren-Root matrix
+transfer are required. The radial dual-porosity option alone has no explicit
+fracture. Combined-model lambda is referenced to well radius and converted to
+the fracture scale as $\lambda_{x_f}=\lambda_{r_w}(x_f/r_w)^2$.
+Match external fluid inputs, transfer definitions and skin conventions before
+comparing parameters; this is not certified equivalence with another product.
+Use Multi-rate > Active Data & QC record to bring the loaded full history into
+whole-history modelling, rather than inadvertently fitting an unrelated sample.
+Generate whole-history model shows absolute-pressure RMS before regression.
+
+**Saved interpretations:** Compare > Manage saved interpretations lets you rename,
+load for parameter editing, delete selected alternatives, or clear the saved list.
+Deletion requires confirmation and leaves uploaded data, the working model and
+Last fit intact. Load the matching dataset before editing; refit and Save to
+Compare as a new alternative to preserve the original snapshot's misfit.
+Download the project again to retain list changes outside this session.
+
+**Parameter uncertainty:** after fitting, choose Parameter distributions (no
+refitting) in the uncertainty panel. Set hard low/high bounds and uniform,
+log-uniform, triangular (most likely), or truncated-normal (underlying mean/SD)
+marginals. Optional Gaussian-copula correlation applies to normal scores:
+$Z\sim N(0,R)$, $U_i=\Phi(Z_i)$, $X_i=F_i^{-1}(U_i)$.
+The symmetric correlation matrix needs unit diagonal and non-negative
+eigenvalues; invalid inputs stop the run. Achieved sample Pearson correlations
+are shown separately. Paired samples produce pointwise P10/P50/P90 response
+bands, not posterior confidence intervals. Fixed parameters/rates stay fixed.
+The existing noisy-data refit method remains separate. Ensembles stay in session
+memory; use the paired-sample CSV download to retain them.
+
+For an **infinite-conductivity fracture**, distinguish additional fracture skin
+from total equivalent radial skin. The input selector converts the latter using
+the late-time approximation $S_\mathrm{total}=S_\mathrm{additional}+
+\ln(2r_w/x_f)$ (effective radius $x_f/2$). Additional skin is non-negative;
+negative total skin can be physical because fracture geometry already represents
+stimulation. This is not an exact early-time equivalence. A radial Horner skin
+estimate is not an additional fracture skin. Negative lumped additional skin can
+produce unstable storage-model poles and is rejected, not plotted.
+
+**Measured-data imports:** Data & QC and Multi-rate accept CSV/TXT/DAT/TSV,
+XLSX and XLS. Inspect the numbered preview, skip title/unit rows, then specify
+whether the next row is a header. Select the worksheet, delimiter and columns.
+Time may be elapsed seconds/minutes/hours/days or calendar timestamps with a
+shared test-start origin. For buildup-only calendar pressure, use shut-in as
+the origin. Pressure time values can be actual reading times or durations between
+readings: durations accumulate in file order, with the interval ending at each
+row's reading. The first interval may be zero; later intervals must be positive.
+Rates may come from the pressure file, a separate file or an editable
+table. Choose period start times (first = zero) or positive period durations;
+rates are constant within each period and zero denotes shut-in. Duration
+coverage must include all pressure readings; the last start-time rate is held.
+For the supplied two-heading-line duration/rate example, skip 2, disable header,
+select whitespace, durations and hours. No uploaded data is put in shared caches.
+
 | Workspace | Recommended use |
 |---|---|
 | Test design | Select reservoir/well/boundary, generate predicted drawdown and buildup, then export or create synthetic data. |

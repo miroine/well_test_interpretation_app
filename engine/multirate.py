@@ -35,6 +35,37 @@ def clean_schedule(schedule):
     return out
 
 
+def from_dataset(dataset, params):
+    """Build a distinct whole-history interpretation from active QC readings."""
+    from . import qc, tabular
+    if dataset.get("fluid") != "Oil" or dataset.get("history") is None:
+        raise ValueError("An oil dataset with measured full pressure/rate history is required.")
+    history = qc.response_source(dataset)
+    keep = np.ones(len(history["t"]), dtype=bool)
+    if dataset.get("qc_source") is not None:
+        keep[np.asarray(dataset.get("qc_excluded", []), int)] = False
+        window = dataset.get("qc_window")
+        if window:
+            keep &= (history["t"] >= window[0]) & (history["t"] <= window[1])
+    t, pw, rates = (np.asarray(history[k], float)[keep] for k in ("t", "p", "rate"))
+    if len(t) < 3 or not np.isfinite(t).all() or not np.isfinite(pw).all() or np.any(np.diff(t) < 0):
+        raise ValueError("Full history must contain finite, ordered pressure readings.")
+    # At a duplicate event time use the last pressure reading; retain the
+    # complete rate schedule independently so rate events are never averaged.
+    last = np.r_[np.diff(t) != 0, True]
+    schedule = dataset.get("rate_schedule")
+    if schedule is None:
+        if t[0] != 0.:
+            raise ValueError("A full rate schedule starting at zero is required.")
+        schedule = schedule_from_series(t, rates)
+    schedule, _ = tabular.rate_schedule([row[0] for row in schedule], [row[1] for row in schedule])
+    tabular.rates_at(t, schedule, dataset.get("rate_end"))
+    use = last & (t > 0)
+    qc.validate_buildup(t[use], pw[use])
+    return {"name": dataset["name"], "schedule": schedule, "t": t[use], "pwf": pw[use],
+            "guess": params.to_dict(), "truth": None, "fit": None}
+
+
 def rate_changes(schedule):
     ts = np.array([s[0] for s in schedule], float)
     qs = np.array([s[1] for s in schedule], float)
@@ -127,6 +158,8 @@ def fit_multirate(p0: M.WellTestParams, schedule, t, pwf, free, multistart=True,
             base.k = float(np.clip(base.B * base.mu * 70.6 / (base.h * pl), 1e-3, 1e5))
     lo = np.array([np.log10(A.FITTABLE[n][0]) if n in A.LOG_PARAMS else A.FITTABLE[n][0] for n in free])
     hi = np.array([np.log10(A.FITTABLE[n][1]) if n in A.LOG_PARAMS else A.FITTABLE[n][1] for n in free])
+    if p0.model in M.INFINITE_FRACTURE_MODELS and "S" in free:
+        lo[free.index("S")] = 0.
 
     def unpack(v, ref):
         p = M.WellTestParams(**ref.to_dict())
@@ -159,6 +192,8 @@ def fit_multirate(p0: M.WellTestParams, schedule, t, pwf, free, multistart=True,
         if progress:
             progress(index, len(starts), f"Fitting attempt {index + 1} of {len(starts)}")
         v0 = np.clip(pack(s), lo + 1e-9, hi - 1e-9)
+        if p0.model in M.INFINITE_FRACTURE_MODELS and "S" in free:
+            v0[free.index("S")] = max(v0[free.index("S")], .01)
         try:
             sol = least_squares(resid, v0, bounds=(lo, hi), args=(s,), max_nfev=max_nfev, x_scale="jac")
         except Exception as exc:

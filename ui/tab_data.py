@@ -8,11 +8,13 @@ from .theme import takeaway
 
 from engine import models as M
 from engine import qc
+from engine import tabular
 from engine import samples as SMP
 from engine import units as U
 from . import figures as F
 from . import helpers as H
 from . import session
+from . import import_data
 
 
 def _load_sample(name):
@@ -36,7 +38,7 @@ def render(meta):
     S = st.session_state
     system, fluid = meta["units"], meta["fluid"]
     pu = U.label("pressure", system)
-    src = st.radio("Data source", ["Sample test", "Upload CSV", "Current dataset"], horizontal=True,
+    src = st.radio("Data source", ["Sample test", "Upload files", "Current dataset"], horizontal=True,
                    key=f"data_src_{S['ver']}")
     if src == "Sample test":
         names = list(SMP.SAMPLES) + ["Gas well (normalized pseudo-pressure)"]
@@ -45,34 +47,35 @@ def render(meta):
                    "for gas-cap and coning scenarios, use Simulator.")
         if st.button("Load sample", type="primary"):
             _load_sample(pick)
-    elif src == "Upload CSV":
+    elif src == "Upload files":
         full = st.checkbox("Upload full test history (pressure and rate)", key="qc_upload_full")
-        up = st.file_uploader("CSV with time and pressure columns (and rate for full history)", type=["csv", "txt"])
-        if up is not None:
-            try:
-                df = pd.read_csv(up, sep=None, engine="python")
-            except Exception as e:
-                st.error(f"Could not read the file: {e}")
-                return
-            cols = list(df.columns)
-            if len(cols) < 2:
-                st.error("The file must contain separate time and pressure columns.")
-                return
-            c1, c2 = st.columns(2)
-            tcol = c1.selectbox("Elapsed test time [hr]" if full else "Time since shut-in [hr]", cols, index=0)
-            pressure_name = "Normalized pseudo-pressure" if fluid == "Gas" else "Pressure"
-            pcol = c2.selectbox(f"{pressure_name} [{pu}]", cols, index=min(1, len(cols) - 1))
+        uploaded = import_data.file_table("Upload pressure data (text or Excel)", "qc_pressure_upload")
+        if uploaded is not None:
+            filename, df = uploaded
+            tcol, pcol, time_opts = import_data.pressure_columns(df, "qc_import", fluid, system, full)
+            if not full and time_opts["unit"] == "Calendar date/time":
+                st.caption("For buildup-only pressure, enter the shut-in timestamp as the shared origin above.")
             if fluid == "Gas":
                 st.caption("Gas buildup interpretation expects normalized pseudo-pressure (psi-equivalent or bar-equivalent), "
                            "not raw measured BHP. Convert gauge BHP before importing.")
             kind = "gasrate" if fluid == "Gas" else "rate"
+            rate = None
             if full:
                 st.caption("Time is elapsed hours from test start, not time since shut-in. "
                            "Choose the start of the final shut-in below. Interpretation assumes the last "
                            "constant pre-shut-in rate; variable-rate interpretation belongs in Multi-rate.")
-                qcol = st.selectbox(f"Recorded surface rate [{U.label(kind, system)}]", cols, index=min(2, len(cols) - 1))
+                rate = import_data.rate_input(df, "qc_rates", system, kind, time_opts["origin"])
+                rate, aligned_tp = import_data.alignment_preview(
+                    df, tcol, pcol, time_opts, rate, "qc_import", system, kind, buildup=True)
+            else:
+                aligned_tp = None
             c3, c4, c5 = st.columns(3)
-            tp = c3.number_input("Flow period before shut-in [hr]", 0.1, 1e6, 100.0, 10.0)
+            if aligned_tp is not None:
+                tp = float(aligned_tp)
+                c3.metric("Flow period before shut-in [hr]", f"{tp:g}")
+                c3.caption("Linked to the selected shut-in marker above. Drag the marker to change it.")
+            else:
+                tp = c3.number_input("Flow period before shut-in [hr]", 0.1, 1e6, 100.0, 10.0)
             q_disp = 0.0
             if full:
                 c4.caption("Pre-shut-in rate is taken from the last non-zero recorded rate.")
@@ -83,24 +86,34 @@ def render(meta):
             if st.button("Use this file", type="primary"):
                 try:
                     history = None
+                    if full and rate is None:
+                        raise ValueError("Provide a valid rate file or rate table before loading the full history.")
+                    mapped = import_data.mapped_frame(df, tcol, pcol, time_opts, rate)
                     if full:
-                        history, issues = qc.clean_history(df, tcol, pcol, qcol)
+                        history, issues = qc.clean_history(mapped, "time", "pressure", "rate")
                         history["p"] = U.to_field(history["p"], "pressure", system)
-                        history["rate"] = U.to_field(history["rate"], kind, system)
+                        if "column" in rate:
+                            history["rate"] = U.to_field(history["rate"], kind, system)
                         flowing = history["rate"][(history["t"] <= tp) & (np.abs(history["rate"]) > 1e-10)]
                         if not len(flowing) or flowing[-1] <= 0:
                             raise ValueError("A positive production rate must be recorded before shut-in.")
                         q_disp = float(U.from_field(flowing[-1], kind, system))
+                        if "schedule" in rate:
+                            q_disp = float(U.from_field(tabular.final_shutin_rate(rate["schedule"], tp), kind, system))
                         if not np.allclose(flowing, flowing[-1]):
                             issues.append("Variable flowing rates: buildup interpretation assumes the last pre-shut-in rate. "
                                           "Use Multi-rate to account for the complete rate history.")
+                        if "schedule" in rate:
+                            schedule_flow = [q for t, q in rate["schedule"] if t < tp and q > 0]
+                            if schedule_flow and not np.allclose(schedule_flow, schedule_flow[-1]):
+                                issues.append("Separate rate schedule has variable rates; use Multi-rate for complete superposition.")
                         mask = history["t"] > tp
                         if np.any(np.abs(history["rate"][mask]) > 1e-10):
                             raise ValueError("Non-zero rates occur after the chosen shut-in time. Choose the final shut-in or use Multi-rate.")
                         d = pd.DataFrame({"t": history["t"][mask] - tp,
                                           "p": U.from_field(history["p"][mask], "pressure", system)})
                     else:
-                        d, issues = qc.clean_gauge(df, tcol, pcol)
+                        d, issues = qc.clean_gauge(mapped, "time", "pressure")
                     n_nonpositive = int((d["t"] <= 0).sum())
                     d = d[d["t"] > 0]
                     qc.validate_buildup(d["t"].to_numpy(), d["p"].to_numpy())
@@ -114,17 +127,19 @@ def render(meta):
                 pwf0 = float(U.to_field(pw0, "pressure", system)) if pw0 > 0 else float(
                     preceding[-1] if len(preceding) else p_field[0])
                 base = H.params_from_dict(S["design_params"]) if S.get("design_params") else M.WellTestParams()
-                session.replace_dataset(S, {"name": up.name, "tp": float(tp), "q_user": float(U.to_field(q_disp, kind, system)),
+                session.replace_dataset(S, {"name": filename, "tp": float(tp), "q_user": float(U.to_field(q_disp, kind, system)),
                                 "dt": d["t"].to_numpy(), "pws": p_field, "pwf_shutin": pwf0, "fluid": fluid,
                                 "truth": None, "guess": base.to_dict(),
                                 "gas": {"T_F": 220.0, "gamma_g": 0.68, "cf": 4e-6} if fluid == "Gas" else None,
                                 "issues": issues, "pressure_kind": "normalized_pseudo_pressure" if fluid == "Gas" else "pressure",
-                                **({"history": history} if history is not None else {})})
+                                **({"history": history} if history is not None else {}),
+                                **({"rate_schedule": rate["schedule"], "rate_end": rate["end"]}
+                                   if rate and "schedule" in rate else {})})
                 st.rerun()
 
     ds = S.get("dataset")
     if ds is None:
-        st.info("Load a sample, upload a CSV, or generate a synthetic test in tab 00.")
+        st.info("Load a sample, upload text/Excel pressure data, or generate a synthetic test in tab 00.")
         return
     st.markdown(f"#### Active dataset: {ds['name']}")
     if ds.get("fluid") != fluid:
@@ -194,6 +209,8 @@ def render(meta):
     a, b = st.columns(2)
     drop = a.checkbox("Remove flagged outliers", value=bool(out.any()), key=f"qc_drop_{S['ver']}")
     ppc = b.slider("Log-time resampling (points per log cycle, 0 = off)", 0, 40, 0, key=f"qc_ppc_{S['ver']}")
+    st.caption("Click Apply QC to use these filters in Interpretation and fitting. "
+               "The full-response QC chart retains originals for inspection; Interpretation shows only kept pressure readings.")
     if st.button("Apply QC to the active dataset"):
         try:
             updated = qc.filter_response(ds, S[manual_key], start, end, drop, ppc, pressure_range)

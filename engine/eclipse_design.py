@@ -45,7 +45,7 @@ def assumptions(p, fluid, system="Field"):
         "SHUT well WBHP may be frozen or absent. BPR at the first connected cell is also requested for shut-in comparison.",
         "Not executed in Eclipse or OPM here. Check parser acceptance, material balance, timestep and grid convergence before use.",
     ]
-    if p.model in ("dual_pss", "dual_slab"):
+    if p.model in ("dual_pss", "dual_slab", "fracture_dual_pss"):
         notes.append(
             "DUAL-POROSITY LIMITATION: this is a late-time equilibrated single-continuum surrogate using total phi, ct and k. "
             "It does NOT reproduce matrix/fracture exchange, omega, lambda or the transient slab/PSS derivative dip. "
@@ -55,11 +55,11 @@ def assumptions(p, fluid, system="Field"):
             "Composite interfaces are stair-stepped cell-centre radial regions. k_outer=k_inner/M; "
             "storage_outer/storage_inner=D/M. Oil uses regional fluid compressibility at common porosity; "
             "gas uses regional porosity at common gas PVT. Transition geometry is mesh-dependent.")
-    if p.model in ("fracture", "fracture_fc", "mfhw"):
+    if p.model in (*M.INFINITE_FRACTURE_MODELS, "fracture_fc", "mfhw"):
         notes.append(
             "Fractures are explicit thin high-permeability strips with kf=FcD*k*xf/width; "
             "edges are inserted in the Cartesian grid. Finite width/porosity adds fracture storage.")
-        if p.model == "fracture":
+        if p.model in M.INFINITE_FRACTURE_MODELS:
             notes.append("Infinite fracture conductivity is approximated by the user-selected large finite FcD.")
     if p.model == "mfhw":
         notes.append(
@@ -160,7 +160,7 @@ def grid_model(p: M.WellTestParams, setup: DeckSetup, fluid, gas=None):
             xf.extend([-radius, -radius / 2, radius / 2, radius])
             yf.extend([-radius, -radius / 2, radius / 2, radius])
     fracture_x = []
-    if p.model in ("fracture", "fracture_fc", "mfhw"):
+    if p.model in (*M.INFINITE_FRACTURE_MODELS, "fracture_fc", "mfhw"):
         if p.xf <= 0 or p.FcD <= 0 or p.f_space <= 0 or not 1 <= p.n_frac <= 12 or int(p.n_frac) != p.n_frac:
             raise ValueError("Fracture dimensions, conductivity, spacing and integer count must be valid.")
         if c.fracture_width_ft >= p.f_space or c.fracture_width_ft >= p.xf:
@@ -233,7 +233,7 @@ def grid_model(p: M.WellTestParams, setup: DeckSetup, fluid, gas=None):
     if len(fracture_x):
         for location in fracture_x:
             fracture |= (np.abs(xx - location) < c.fracture_width_ft / 2) & (np.abs(yy) < p.xf)
-        fcd = c.infinite_fracture_fcd if p.model == "fracture" else p.FcD
+        fcd = c.infinite_fracture_fcd if p.model in M.INFINITE_FRACTURE_MODELS else p.FcD
         perm[fracture] = fcd * p.k * p.xf / c.fracture_width_ft
         poro[fracture] = c.fracture_porosity
     permz = perm * (p.kv_kh if p.model in ("horizontal", "limited_entry") else 1.0)
@@ -372,7 +372,7 @@ def build_deck(p, setup, well, q_user, tp, dt_end, fluid, minimum_bhp, gas=None,
         "minimum_bhp_psia": minimum_bhp, "grid_shape": [nx, ny, nz], "active_cells": int(g["active"].sum()),
         "completion_count": len(g["connections"]), "well_datum_ft": g["ref_depth"],
         "bpr_probe_ijk": [int(v) + 1 for v in g["connections"][0][:3]],
-        "approximated_source_parameters": (["omega", "lam"] if p.model in ("dual_pss", "dual_slab") else []) + ["C"],
+        "approximated_source_parameters": (["omega", "lam"] if p.model in ("dual_pss", "dual_slab", "fracture_dual_pss") else []) + ["C"],
         "assumptions_and_limits": notes,
         "validation": "Generated and structurally tested only; not simulator-executed or history-matched.",
     }

@@ -13,7 +13,9 @@ import numpy as np
 from . import laplace as L
 
 MODEL_TYPES = ("homogeneous", "dual_pss", "dual_slab", "composite",
-               "fracture", "limited_entry", "horizontal", "fracture_fc", "mfhw", "composite3")
+               "fracture", "limited_entry", "horizontal", "fracture_fc", "mfhw", "composite3",
+               "fracture_dual_pss")
+INFINITE_FRACTURE_MODELS = ("fracture", "fracture_dual_pss")
 BOUNDARY_TYPES = ("none", "fault", "const_p_fault", "channel", "corner", "circle", "circle_cp", "rectangle")
 CLOSED_BOUNDARIES = ("circle", "circle_cp", "rectangle")
 
@@ -69,7 +71,7 @@ class WellTestParams:
 
 # ------------------------------------------------------------------ helpers
 def _scale_length(p: WellTestParams) -> float:
-    return p.xf if p.model in ("fracture", "fracture_fc", "mfhw") else p.rw
+    return p.xf if p.model in (*INFINITE_FRACTURE_MODELS, "fracture_fc", "mfhw") else p.rw
 
 
 def tD_of(p: WellTestParams, t_hr):
@@ -105,6 +107,9 @@ def _boundary_dict(p: WellTestParams):
 
 
 def _kernel(p: WellTestParams):
+    if p.model == "fracture_dual_pss":
+        # lambda is defined using rw; the fracture solver's time scale uses xf.
+        return lambda u: L.f_dual_pss(u, p.omega, p.lam * (p.xf / p.rw) ** 2)
     if p.model == "dual_pss":
         return lambda u: L.f_dual_pss(u, p.omega, p.lam)
     if p.model == "dual_slab":
@@ -124,8 +129,16 @@ def boundary_warning(p: WellTestParams):
     return None
 
 
+def validate_skin(p: WellTestParams):
+    if p.model in INFINITE_FRACTURE_MODELS and p.S < 0:
+        raise ValueError("The explicit fracture model requires non-negative additional skin. "
+                         "For negative total equivalent radial skin, select that skin definition "
+                         "in the input form; fracture stimulation is already represented by xf.")
+
+
 def laplace_function(p: WellTestParams):
     """Return pws(u) for the chosen model (skin and storage included)."""
+    validate_skin(p)
     kern, CD, S, bd = _kernel(p), CD_of(p), p.S, _boundary_dict(p)
     if p.boundary in CLOSED_BOUNDARIES and p.model in ("homogeneous", "dual_pss", "dual_slab"):
         rw = p.rw
@@ -142,7 +155,7 @@ def laplace_function(p: WellTestParams):
     if p.model == "composite":
         rD = p.r_inner / p.rw
         return lambda u: L.pws_composite(u, kern, CD, S, rD, p.M, p.D, bd)
-    if p.model == "fracture":
+    if p.model in INFINITE_FRACTURE_MODELS:
         return lambda u: L.pws_fracture(u, kern, CD, S, 0.732, bd)
     if p.model == "fracture_fc":
         return lambda u: L.pws_fracture_fc(u, kern, CD, S, p.FcD, bd)
@@ -157,6 +170,13 @@ def laplace_function(p: WellTestParams):
         return lambda u: L.pws_horizontal(u, kern, CD, S, p.Lw / p.rw, hD, p.zw_h,
                                           p.top_bc, p.bot_bc)
     raise ValueError(p.model)
+
+
+def fracture_geometric_skin(p: WellTestParams) -> float:
+    """Late-time infinite-conductivity approximation: effective radius xf/2."""
+    if p.model not in INFINITE_FRACTURE_MODELS or p.xf <= 0 or p.rw <= 0:
+        raise ValueError("Equivalent fracture skin requires the infinite-conductivity fracture model and positive rw/xf.")
+    return float(np.log(2. * p.rw / p.xf))
 
 
 # --------------------------------------------------------------- responses
@@ -226,6 +246,7 @@ def prepare_pwf_history(t_hr, schedule):
         return responses
 
     def evaluate(p):
+        validate_skin(p)
         key = tuple((name, value) for name, value in p.to_dict().items()
                     if name not in ("C", "S", "pi"))
         responses = reservoir(key)

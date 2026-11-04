@@ -18,7 +18,6 @@ from . import model_schematic
 from . import design_eclipse
 
 
-@st.cache_data(show_spinner=False)
 def _designed_test(params, q, tp, dt_end):
     return viz.designed_test(H.params_from_dict(params), q, tp, dt_end)
 

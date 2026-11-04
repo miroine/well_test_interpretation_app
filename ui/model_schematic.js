@@ -62,7 +62,7 @@ export default function ({data: d, parentElement}) {
     }
     label(85,345,d.model==="dual_slab" ? "Layered matrix blocks / transient transfer" : "Matrix blocks / pseudo-steady transfer");
     label(460,345,"Connected fracture network",blue);
-  } else if (["fracture","fracture_fc"].includes(d.model)) {
+  } else if (["fracture","fracture_dual_pss","fracture_fc"].includes(d.model)) {
     line(cx-145,cy,cx+145,cy,blue,d.model==="fracture_fc" ? 9 : 4,features);
     if(d.model==="fracture_fc") for(let i=-3;i<=3;i++) line(cx+i*35,cy-9,cx+i*35,cy+9,navy,2,features);
     label(cx-145,cy-18,d.model==="fracture_fc" ? "Finite conductivity; FcD controls pressure loss" : "Infinite-conductivity fracture");

@@ -24,11 +24,13 @@ SOFTWARE.
 ADDITIONAL ENGINEERING-USE DISCLAIMER
 ================================================================================
 
-Aquila is a software tool for pressure-transient analysis (PTA), provided
-for educational, research, and engineering-decision-support purposes. The
-analytical methods, correlations, and inversion routines implemented here
-are documented in `docs/Aquila_Methods.pdf` and reference the peer-reviewed
-petroleum-engineering literature.
+Well Test Workbench is made by Merouane Hamdani for educational purposes only.
+It is provided AS IS, without warranty, and is not validated for operational,
+safety, regulatory or commercial decisions. Independently verify all inputs,
+assumptions and results. This intended-use disclaimer does not limit the
+permissions granted by the MIT License above. The implemented methods are
+described in the application's Documentation & formulas tab; the retained
+Aquila_Methods.pdf is a legacy reference, not certification of this workbench.
 
 The user acknowledges that:
 
@@ -54,16 +56,10 @@ The user acknowledges that:
 TRADEMARK AND AFFILIATION NOTICE
 ================================================================================
 
-This software's visual identity (colour palette, typography, layout
-conventions) is INSPIRED BY the publicly-available corporate-design
-language of Equinor ASA, including the use of deep-sea blue and red
-accent colours and sans-serif typography.
-
-Aquila IS NOT a product of Equinor ASA. The author is not affiliated with,
-endorsed by, or sponsored by Equinor ASA. The Equinor name, logo, and
-wordmark are NOT used in this software. Any resemblance to Equinor
-products is for aesthetic purposes only and conveys no endorsement or
-commercial relationship.
+Well Test Workbench is a personal educational project, not an official product
+of Equinor ASA or McKinsey & Company. No organizational endorsement or
+sponsorship is claimed. Its editorial colour palette and typography do not
+convey affiliation or a commercial relationship.
 
 All trademarks, registered or unregistered, remain the property of their
 respective owners.

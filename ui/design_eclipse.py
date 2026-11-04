@@ -11,7 +11,6 @@ from engine import eclipse_design as D
 from engine import units as U
 
 
-@st.cache_data(show_spinner=False, max_entries=8)
 def comparison_package(well, curves, q_user, tp, dt_end, system, fluid, minimum_bhp, pi, gas):
     return E.zip_files(E.comparison_files(well, curves, q_user, tp, dt_end, system, fluid, minimum_bhp, pi, gas))
 
@@ -60,10 +59,10 @@ def render(p, curves, q_user, tp, dt_end, fluid, gas, well, minimum_bhp, system)
             st.caption("Dry-gas PVT uses the design temperature and gas gravity; deck rock compressibility "
                        "should match the design formation compressibility for comparison. Oil density is inactive.")
         width, fracture_phi, infinite_fcd = 0.02, 0.2, 1e4
-        if p.model in ("fracture", "fracture_fc", "mfhw"):
+        if p.model in ("fracture", "fracture_dual_pss", "fracture_fc", "mfhw"):
             width = number("fracture_width_ft", "Physical fracture width", "length", 1e-5, 10.0, 0.02, fmt="%.5g")
             fracture_phi = st.number_input("Fracture porosity", 0.001, 0.999, 0.2, key="design_deck_frac_phi")
-            if p.model == "fracture":
+            if p.model in ("fracture", "fracture_dual_pss"):
                 infinite_fcd = st.number_input("Finite proxy for infinite fracture FcD", 1e2, 1e8, 1e4,
                                                key="design_deck_infinite_fcd")
         buffer = st.number_input("Constant-pressure buffer pore-volume multiplier", 1.0, 1e12, 1e6,

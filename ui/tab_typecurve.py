@@ -12,7 +12,6 @@ from . import figures as F
 from . import helpers as H
 
 
-@st.cache_data(show_spinner=False)
 def _family():
     return T.family()
 

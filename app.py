@@ -9,7 +9,7 @@ import hashlib
 import streamlit as st
 
 from engine import project
-from ui import session
+from ui import privacy, session
 from ui import (report_ui, tab_animation, tab_compare, tab_data, tab_deconv, tab_design, tab_fmb,
                 tab_info, tab_interp, tab_ipr, tab_multirate, tab_simulator, tab_typecurve, theme,
                 tab_advanced)
@@ -24,6 +24,8 @@ session.initialize(S)
 with st.sidebar:
     st.markdown("### Well Test Workbench")
     st.caption("Pressure transient analysis")
+    st.button("Clear session data", key="privacy_clear", on_click=session.clear, args=(S,),
+              help="Reset this session, including uploads, project details, inputs and results. Downloads on your device are not deleted.")
     up = st.file_uploader("Open project", type=["json"], key="proj_up")
     if up is not None:
         content = up.getvalue()
@@ -52,6 +54,7 @@ meta = {"well": well, "field": field, "date": date, "analyst": analyst, "fluid":
 st.title("Well Test Workbench")
 st.markdown("Plan with confidence. Interpret with evidence.")
 st.caption(f"{well} | {field} | {fluid} | {units} units")
+privacy.render()
 
 tabs = st.tabs(["00 Test design", "01 Data & QC", "02 Interpretation", "03 Type curve", "04 Compare",
                 "Multi-rate", "05 Deconvolution", "06 Simulator", "07 IPR", "08 FMB", "09 Advanced",

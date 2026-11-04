@@ -15,6 +15,12 @@ DEFAULTS = {
 DATASET_RESULTS = ("last_fit", "interp_eng", "interp_model", "horner", "tc_match", "mc", "sens")
 
 
+def clear(state):
+    """Drop this session's project, results, metadata and widget references."""
+    for key in list(state):
+        del state[key]
+
+
 def initialize(state):
     for key, value in DEFAULTS.items():
         state.setdefault(key, [] if isinstance(value, list) else value)

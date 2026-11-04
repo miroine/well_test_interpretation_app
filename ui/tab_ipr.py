@@ -9,6 +9,7 @@ from .theme import takeaway
 from engine import ipr
 from engine import units as U
 from . import figures as F
+from .inputs import radius_input
 
 
 def _oil(system, ver):
@@ -56,8 +57,8 @@ def _oil(system, ver):
         e5, e6, e7 = st.columns(3)
         mu = e5.number_input("Viscosity [cp]", min_value=0.01, value=1.0, key=f"ipr_mu_{ver}")
         B = e6.number_input("Bo [rb/stb]", min_value=0.5, value=1.2, key=f"ipr_B_{ver}")
-        rw = e7.number_input(f"rw [{U.label('length', system)}]", min_value=0.01, value=f(0.354, "length"), key=f"ipr_rw_{system}_{ver}")
-        Jr = ipr.pi_pss(k, g(h, "length"), mu, B, g(re_, "length"), g(rw, "length"), sk)
+        rw = radius_input("ipr", .354, system, ver, e7)
+        Jr = ipr.pi_pss(k, g(h, "length"), mu, B, g(re_, "length"), rw, sk)
         jr_display = Jr * U.from_field(1.0, "rate", system) / U.from_field(1.0, "pressure", system)
         st.metric(f"Theoretical J [{ru}/{pu}]", f"{jr_display:.3g}", delta=f"{(J / Jr - 1) * 100:+.0f}% vs test-derived", delta_color="off")
 

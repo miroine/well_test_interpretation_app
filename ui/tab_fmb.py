@@ -11,7 +11,6 @@ from engine import units as U
 from . import figures as F
 
 
-@st.cache_resource(show_spinner=False)
 def _tank(pi, T_F, gamma):
     return fmb.GasTank(pi, T_F, gamma, n=300)
 

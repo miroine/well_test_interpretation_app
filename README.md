@@ -89,11 +89,158 @@ change the analytical well solver or its negative-skin parameter support.
 The family uses denser log-time sampling; invalid log-axis values remain gaps,
 not lines joined across removed points.
 
+## Well radius input units
+
+Wellbore radius inputs in the shared model forms (including Test design,
+Interpretation and Multi-rate) and oil IPR offer **Well radius input unit**:
+project length units (ft or m) or **in**. Switching preserves physical radius;
+inches are converted using 12 in = 1 ft = 0.3048 m. Enter radius, not diameter.
+Engine parameters and saved project radius values remain in feet.
+
+### Skin for the infinite-conductivity fracture model
+
+The explicit fracture geometry already represents stimulation. **Fracture skin
+definition** distinguishes **Additional skin** (the solver's stored/fitted `S`,
+non-negative) from **Total equivalent radial skin** (may be negative).
+The latter uses the late-time approximation
+`S_total = S_additional + ln(2 rw / xf)`, corresponding to effective radius `xf/2`.
+This is not an exact early-time equivalence and is specific to the
+infinite-conductivity fracture model, not a general conversion for other models.
+The admissible total-skin minimum depends on the selected rw and xf.
+For rw = 0.354 ft and xf = 280 ft, geometric skin is about -5.980, so total
+skin -4 means additional skin about +1.980.
+
+Negative *additional* lumped skin in this explicit fracture/storage formulation
+can create a positive-real Laplace pole and huge nonphysical spikes. It is now
+rejected explicitly, not clipped or hidden by plot limits. Previously saved
+negative additional fracture skin must be re-entered using the intended
+definition. Regression fits non-negative additional skin; a zero initial fitted
+skin is seeded at 0.01 to avoid a vanishing bounded-solver initial trust region.
+Radial/Horner skin estimates are equivalent radial quantities and must not be
+copied directly into an additional-fracture-skin input.
+
+### Parameter-distribution uncertainty
+
+After fitting, open **Interpretation > Uncertainty: sensitivity and Monte Carlo**
+and select **Parameter distributions (no refitting)**. Choose continuous active
+model parameters (not only fitted ones), then specify hard low/high bounds and:
+
+- **Uniform:** equal density between the bounds.
+- **Log-uniform:** equal density per logarithmic interval; both bounds positive.
+- **Triangular:** bounds plus a most-likely value within them.
+- **Truncated normal:** bounds, mean and positive standard deviation of the
+  underlying normal distribution before truncation. The truncated mean can differ.
+
+Inputs and downloaded sample columns use the selected display units; sampling
+uses engine field units. Explicit fracture skin is additional skin, not total
+equivalent radial skin. Gas viscosity/B/compressibility are derived and excluded
+from this direct sampling mode. Discrete fracture count is not sampled.
+
+Parameters are independent by default. Enable **Correlate parameters (Gaussian
+copula)** to edit a matrix in the displayed parameter order. Enter both symmetric
+halves, use diagonal ones and correlations in [-1,1]. The matrix must be positive
+semidefinite, including for three or more parameters; incompatible matrices are
+rejected rather than silently repaired. The algorithm draws normal scores with
+this correlation, applies their normal CDF, then each bounded distribution's
+inverse CDF. Thus this matrix is **normal-score correlation**, not necessarily
+the resulting parameters' Pearson correlation. The achieved finite-ensemble
+Pearson matrix is displayed after calculation.
+
+**Run parameter uncertainty** propagates paired samples through the model to
+pointwise P10/P50/P90 pressure, pressure-change and derivative envelopes. It does
+not refit pressure data, change Last fit, or infer posterior confidence limits.
+Unselected parameters and rates stay fixed. A sampling seed makes runs
+reproducible; invalid geometry or model responses stop the calculation without
+silently dropping samples. Changing controls leaves the last completed ensemble
+unchanged until rerun. Samples/results remain session-only (not in project JSON);
+download paired samples as CSV to retain them. The original **Noisy-data refits**
+mode remains available for gauge-noise-related fitting uncertainty.
+
+### Applying QC filters
+
+Pressure/time filters and point exclusions take effect after **Data & QC >
+Apply QC to the active dataset**. Interpretation then plots kept pressure
+readings only and uses the active buildup readings for diagnostics and fitting.
+The Data & QC full-response chart intentionally retains originals for reversible
+inspection. Recorded rate history is never pressure-filtered: rate events remain
+intact. **Restore original response** undoes applied QC.
+
+### Managing saved interpretations
+
+Open Compare > Manage saved interpretations
+to rename an alternative, load its parameters into the Interpretation working
+model, delete selected entries, or clear the saved list. Deletion requires
+confirmation and does not remove uploaded data, the working model, or Last fit.
+Loading for editing requires the original dataset and matching fluid; edit and
+refit in Interpretation, then Save to Compare as a new alternative. Saved
+snapshots retain their original parameters and misfit until deleted. These
+actions update session memory, not previously downloaded project files; download
+the project again to retain the revised list.
+
+### Comparing a fractured dual-porosity test with external software
+
+Select **Infinite-conductivity fracture + dual porosity (pseudo-steady)** to
+combine explicit fracture geometry with a Warren-Root PSS reservoir. Selecting
+the radial **Dual porosity (pseudo-steady)** model alone does not include a
+fracture: its `xf` is inactive. The combined model uses fracture-scale time and
+storage, and defines input lambda on well radius:
+`lambda_xf = lambda_rw * (xf/rw)^2`. Check the external program's transfer
+definition, reference length, skin convention, viscosity, B, total compressibility
+and porosity before copying fitted parameters. The fracture remains the existing
+uniform-flux/equivalent-observation-point approximation, not a certified
+implementation of another vendor's solver. Closed-reservoir boundaries remain
+unsupported for explicit fracture models and trigger the existing warning.
+
+For a measured variable-rate test already in Data & QC, choose **Multi-rate >
+Active Data & QC record > Use active pressure and rate history**. This explicitly
+replaces any unrelated sample in that tab and seeds controls from current
+Interpretation parameters (or the dataset guess). It preserves the independent
+rate schedule, uses QC-kept pressure points, and takes the last pressure at
+duplicate event times without averaging rate changes. Imported readings and
+the separate source dataset are not overwritten.
+
+Set the same initial pressure and rock/fluid inputs as the reference program;
+the application does not infer them from an image. Use **Additional skin** when
+entering extra skin associated with the explicit fracture, not a radial total.
+**Generate whole-history model** plots absolute pressure and period diagnostics
+without regression, and displays pressure RMS in physical units. Regression
+uses the whole rate schedule; parameter starting values and saved fits remain
+distinct. The local period diagnostic uses elapsed period time, not an external
+program's rate-superposition time axis, so visual axes need not coincide.
+Interpretation still uses a single-rate buildup approximation; use Multi-rate
+for this comparison. Numerical Eclipse exports of the combined model retain
+their explicit fracture approximation but **do not** reproduce dual-porosity
+exchange; omega/lambda are source metadata only.
+
+## Data privacy and educational-use notice
+
+Made by **Merouane Hamdani**, under the **MIT License**. For **educational
+purposes only**, provided AS IS without warranty. Not validated for operational,
+safety, regulatory or commercial decisions; independently verify all results.
+This intended-use disclaimer does not restrict the rights granted by the MIT License.
+
+Uploads, parameters and results live in the active Streamlit session in server
+memory. The app does not automatically write user data to files or databases and
+does not use shared Streamlit data/resource caches. Numerical calculation
+workspaces are temporary; only non-user-specific Stehfest constants have a
+process-wide numerical cache. Download payloads are temporarily held in memory;
+projects/reports/exports are saved to your device only when you choose to download.
+**Clear session data** resets this session's app state and upload-widget references,
+but is not a secure-memory-erasure guarantee and does not delete downloaded files.
+
+Hosted uploads reach the hosting server, not just your browser. Provider logs,
+backups, infrastructure retention and browser storage are outside the app's
+control. Do not upload sensitive data without organizational approval; prefer an
+approved local deployment. Streamlit usage statistics are disabled in the supplied
+configuration. Restart an already-running deployment after this update to release
+any caches created by older versions; removing cache decorators does not erase
+objects already held by a running process.
+
 In **02 Interpretation**, edit the reservoir, well, model and boundary parameters,
 then click **Generate model** to calculate a forward response without regression.
 After the first generation, edits automatically update the **Working model**
-pressure-change and derivative curves. Repeated unchanged responses are cached,
-so changing display units does not rerun the solver.
+pressure-change and derivative curves. Responses are recomputed on reruns rather
+than stored in a shared application cache.
 
 **Fit to data** separately runs automatic regression using the selected free
 parameters. The fitted values are loaded back into the parameter controls.
@@ -198,9 +345,65 @@ points remain visible in red. **Restore original response (undo all QC)** brings
 back the original readings, including after project save/open. Applying or
 restoring QC invalidates old analysis results.
 
-For measured full histories, choose **Upload CSV** and enable **Upload full test
-history (pressure and rate)**. Map elapsed time in hours, pressure and surface
-rate in the sidebar units, and specify the flow duration/start of the final
+For measured data, choose **Upload files**. Supported pressure and rate formats:
+CSV, TXT, DAT, TSV, Excel XLSX and legacy XLS. For Excel choose the worksheet.
+The raw preview is numbered from 1. **Rows to skip before header/data** skips
+physical lines/worksheet rows; enable **First remaining row contains column names**
+only if that row is a header. A caption identifies the first data row. Text
+imports support comma, semicolon, tab and whitespace delimiters, decimal dot/comma,
+and UTF-8, UTF-16 or Windows-1252 encoding. A parsed preview shows 20 rows; the
+whole file is imported. Invalid time/pressure/rate values produce explicit errors,
+not silently discarded readings.
+
+Map the pressure/time columns. Time can be seconds, minutes, hours, days or
+calendar date/time. Calendar inputs require an explicit shared test-start timestamp
+(the shut-in timestamp for buildup-only data); pressure and separate rate files
+must use the same origin. Optional timestamp format and day-first controls resolve
+ambiguous dates. Timestamps without a timezone are treated as UTC; do not mix local
+time zones. Numeric elapsed times are not shifted automatically.
+**Interpret pressure time values as** explicitly selects **Actual reading times**
+or **Durations between readings**, in both Data & QC and Multi-rate. Duration mode
+accumulates intervals in file order before plotting, rate alignment or import:
+`0, 12, 12, 24` hours becomes `0, 12, 24, 48` hours. Each interval ends at its
+row's pressure reading; the first runs from the selected test/shut-in origin and
+may be zero, while subsequent intervals must be positive. Numeric units apply
+before accumulation; calendar timestamps are available only in actual-time mode.
+A converted elapsed-time preview lets you verify the interpretation.
+
+Enable **Upload full test history (pressure and rate)** for full-response QC.
+Choose rates from the pressure file, a separate uploaded file, or **Enter rate
+table** (editable rows with spreadsheet paste). Rate times may be strictly
+increasing **Period start times**, beginning at zero, or positive **Period
+durations**, accumulated from zero. Zero rate means shut-in. For the supplied
+KAPPA-style duration/rate text example: skip **2** rows, disable the header,
+choose **Whitespace**, **Period durations**, **Hours**; data starts on line **3**.
+Durations must cover the entire pressure history; with start times the final
+rate is held to the record end. Pressure and rates use sidebar units.
+The **Interpret rate time values as** selector sits immediately after the rate
+file preview/column mapping (or before manual table entry): choose **Duration of
+each period** for repeated lengths, or **Actual time at the start of each period**
+for elapsed/calendar starts. The interpreted schedule preview always shows the
+resulting start hours; duration mode also displays total coverage.
+
+Before **Use this file**, separate-file and manual-table rates show a
+**Preview and synchronize pressure / rate** editor. Drag any period-start
+marker on either plot to align shutdowns with the recorded pressure response
+(arrow keys: 0.1 hr, Shift: 1 hr). The first start stays at zero, boundaries
+remain ordered, and pressure readings/rate magnitudes never change. Select the
+**Shut-in boundary for buildup**; its edited time supplies the flow duration
+automatically, avoiding a separate mismatched shut-in input. For the example,
+the final shut-in defaults to 84 hr, not the generic 100 hr.
+Timing changes remain draft session state until import; **Reset timing alignment**
+restores the supplied schedule, and changes to source readings/schedules reset
+the draft automatically. Duration-file end coverage is unchanged by moving an
+internal boundary; import still validates coverage and the final shut-in.
+
+The same import controls are available under **Multi-rate > Upload pressure and
+rates**. Separate rate-event times are preserved exactly, even between pressure
+samples; rates are piecewise constant, never linearly interpolated. Only oil
+multi-rate analysis is supported. Separate schedules also survive project save/open.
+
+For full-response QC, specify the flow duration/start of the final
 shut-in. Duplicate timestamps at a rate change retain both sides of the event.
 The last non-zero pre-shut-in rate supplies the interpretation rate; post-shut-in
 rates must be zero. Variable flowing rates are flagged: use **Multi-rate** for
@@ -208,7 +411,7 @@ rate-history-aware interpretation rather than the single-rate buildup workflow.
 Legacy/sample buildup-only records do not invent drawdown pressure; their
 separate rate plot is explicitly labelled as a specified schedule.
 Synthetic gas pressure is labelled normalized pseudo-pressure, not measured BHP.
-Gas CSV imports likewise expect normalized pseudo-pressure in the selected
+Gas pressure imports likewise expect normalized pseudo-pressure in the selected
 pressure-equivalent units, matching the existing analytical interpretation;
 raw gas gauge BHP must be converted before import.
 
@@ -221,9 +424,9 @@ Small dense fracture systems use SciPy's general LAPACK solver.
 Reports reuse the current design curves rather than solving the design again.
 
 The separate **Buildup animation** tab now computes its full spatial-animation
-payload only when opened; it is cached until the model, rate or timing changes.
+payload only when opened; it is not stored in a shared application cache.
 The model schematic in Test design still plays locally without extra solves.
-Switching tabs triggers a Streamlit rerun, with design calculations cached.
+Switching tabs triggers a Streamlit rerun and recomputes design calculations.
 
 On the approved Windows environment, default four-fracture design calculations
 fell from about 15.6 s to 2.5 s. A fresh browser session selected the model in

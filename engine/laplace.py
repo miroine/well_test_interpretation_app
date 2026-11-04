@@ -402,7 +402,6 @@ def pws_circle(u, kernel_f, CD, S, reD, outer="sealed"):
     return _add_storage_skin(num / den, u, CD, S)
 
 
-@lru_cache(maxsize=32)
 def _rect_images(xe, ye, xw, yw, sx, sy, rmax):
     """Image lattice of a well at (xw, yw) in [0,xe]x[0,ye]; signed, sorted by distance."""
     mx = int(np.ceil(rmax / (2 * xe))) + 1

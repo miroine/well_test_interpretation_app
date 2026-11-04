@@ -11,7 +11,7 @@ export default function ({data, parentElement, setTriggerValue}) {
   status.className = "status";
   status.setAttribute("role", "status");
   root.appendChild(status);
-  const left = 95, right = 875, end = data.time[data.time.length - 1];
+  const left = 95, right = 875, end = data.end ?? data.time[data.time.length - 1];
   const x = t => left + t / end * (right - left);
   const starts = data.schedule.map(s => s[0]);
   const colors = ["#2251FF", "#0A7D6B", "#c2410c", "#7A8CA0"];

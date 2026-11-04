@@ -11,7 +11,6 @@ from . import helpers as H
 from .animation import build_html
 
 
-@st.cache_data(show_spinner=False)
 def _payload(params_json: str, q: float, tp: float, dt_end: float):
     p = H.params_from_dict(json.loads(params_json))
     return viz.animation_payload(p, q, tp, dt_end)

@@ -96,6 +96,8 @@ def _fit_once(p0, q, tp, dt, dp_obs, der_obs, ok, ta, free, weight_deriv, max_nf
                    for n in free])
     hi = np.array([np.log10(FITTABLE[n][1]) if n in LOG_PARAMS else FITTABLE[n][1]
                    for n in free])
+    if p0.model in M.INFINITE_FRACTURE_MODELS and "S" in free:
+        lo[free.index("S")] = 0.
 
     def resid(v):
         p = unpack(v)
@@ -108,6 +110,9 @@ def _fit_once(p0, q, tp, dt, dp_obs, der_obs, ok, ta, free, weight_deriv, max_nf
         return np.concatenate([r1, r2])
 
     v0 = np.clip(pack(p0), lo + 1e-9, hi - 1e-9)
+    if p0.model in M.INFINITE_FRACTURE_MODELS and "S" in free:
+        # A near-zero bounded seed can give TRF a vanishing initial trust region.
+        v0[free.index("S")] = max(v0[free.index("S")], .01)
     sol = least_squares(resid, v0, bounds=(lo, hi), max_nfev=max_nfev, x_scale="jac")
     return unpack(sol.x), sol
 

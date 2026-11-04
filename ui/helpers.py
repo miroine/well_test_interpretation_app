@@ -65,6 +65,7 @@ BOUNDARY_SPEC = {
                       ("d2", "Distance to fault 2", "length", 10.0, 5e4, 10.0, "%.4g")],
 }
 MODEL_LABELS = {
+    "fracture_dual_pss": "Infinite-conductivity fracture + dual porosity (pseudo-steady)",
     "homogeneous": "Homogeneous", "dual_pss": "Dual porosity (pseudo-steady)",
     "dual_slab": "Dual porosity (transient slab)", "composite": "Radial composite",
     "fracture": "Infinite-conductivity fracture", "limited_entry": "Limited entry (partial penetration)",
@@ -73,6 +74,7 @@ MODEL_LABELS = {
     "fracture_fc": "Finite-conductivity fracture",
     "mfhw": "Multi-fractured horizontal well",
 }
+MODEL_SPEC["fracture_dual_pss"] = MODEL_SPEC["fracture"] + MODEL_SPEC["dual_pss"]
 BOUNDARY_LABELS = {
     "none": "Infinite acting", "fault": "Sealing fault",
     "const_p_fault": "Constant-pressure boundary", "channel": "Parallel sealing faults (channel)",
@@ -118,7 +120,8 @@ def metric_str(value, kind, system, fmt="{:,.3g}"):
 def fit_free_params(model: str, boundary: str):
     free = ["k", "S", "C"]
     free += {"dual_pss": ["omega", "lam"], "dual_slab": ["omega", "lam"],
-             "fracture": ["xf"], "composite": ["r_inner", "M", "D"],
+             "fracture": ["xf"], "fracture_dual_pss": ["xf", "omega", "lam"],
+             "composite": ["r_inner", "M", "D"],
              "fracture_fc": ["xf", "FcD"], "composite3": ["r_inner", "r_mid", "M", "M3"], "mfhw": ["xf", "FcD"], "horizontal": ["Lw", "kv_kh"]}.get(model, [])
     if boundary in ("circle", "circle_cp"):
         free.append("re")

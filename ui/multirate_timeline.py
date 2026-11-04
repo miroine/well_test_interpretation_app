@@ -60,10 +60,16 @@ def render(mr, system, selected, ver):
                "Drag a vertical start marker on either plot, then release to apply. "
                "Recorded pressure stays unchanged; old regression/deconvolution results are cleared. "
                "The first start remains at zero. Arrow keys: 0.1 hr; Shift: 1 hr.")
+    draw(mr["schedule"], mr["t"], mr["pwf"], system, selected, key, changed)
+
+
+def draw(schedule, times, pressure, system, selected, key, changed, kind="rate", end=None):
+    """Draw the shared editor; the caller owns validation and session updates."""
     component("welltest_multirate_timeline", html='<div class="timeline"></div>', css=_CSS, js=_JS)(
         key=key, height="content", on_timing_change=changed,
-        data={"schedule": [list(row) for row in mr["schedule"]], "time": np.asarray(mr["t"]).tolist(),
-              "pressure": U.from_field(np.asarray(mr["pwf"]), "pressure", system).tolist(),
-              "rates": [float(U.from_field(row[1], "rate", system)) for row in mr["schedule"]],
-              "pressure_unit": U.label("pressure", system), "rate_unit": U.label("rate", system),
+        data={"schedule": [list(row) for row in schedule], "time": np.asarray(times).tolist(),
+              "pressure": U.from_field(np.asarray(pressure), "pressure", system).tolist(),
+              "rates": [float(U.from_field(row[1], kind, system)) for row in schedule],
+              "pressure_unit": U.label("pressure", system), "rate_unit": U.label(kind, system),
+              "end": end,
               "selected": int(selected)})

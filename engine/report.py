@@ -124,5 +124,7 @@ def build_html(title, meta: dict, sections: list) -> str:
         if s.get("note"):
             o.append(f"<p class='note'>{html.escape(s['note'])}</p>")
         o.append("</section>")
-    o.append("</body></html>")
+    o.append("<footer><p>Made by Merouane Hamdani. MIT License. For educational purposes only. "
+             "Provided AS IS, without warranty. Not validated for operational, safety, regulatory "
+             "or commercial decisions. Independently verify all results.</p></footer></body></html>")
     return "".join(o)

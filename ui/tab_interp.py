@@ -1,6 +1,8 @@
 """02 Interpretation - diagnostics, Horner analysis and model matching."""
 from __future__ import annotations
 
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -13,6 +15,7 @@ from engine import viz
 from . import figures as F
 from . import helpers as H
 from . import inputs
+from . import uncertainty
 from .calculation import FitProgress
 
 LABELS = {"k": ("Permeability", "perm"), "S": ("Skin", "none"), "C": ("Wellbore storage", "storage"),
@@ -30,7 +33,6 @@ def _fmt(v):
     return f"{v:.4g}"
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
 def _model_response(params, q, tp, dt_min, dt_end):
     p = H.params_from_dict(params)
     cur = viz.model_curves(p, q, tp, dt_end, dt_min=dt_min)
@@ -40,7 +42,6 @@ def _model_response(params, q, tp, dt_min, dt_end):
             "pressure": np.concatenate([[p.pi], flowing, cur["pws"]])}
 
 
-@st.cache_data(show_spinner=False, max_entries=8)
 def _mc_envelope(params, q, tp, dt_min, dt_end, samples):
     dt = np.geomspace(dt_min, dt_end, 140)
     return viz.monte_carlo_envelope(H.params_from_dict(params), q, tp, dt, samples)
@@ -54,6 +55,11 @@ def _sync_controls(state, p, gas, system, ver):
             continue
         state[f"interp_{name}_{system}_{ver}"] = float(U.from_field(getattr(p, name), kind, system))
     state[f"interp_model_{ver}"] = p.model
+    state[f"interp_rw_in_{ver}"] = float(p.rw * 12.)
+    state.pop(f"_interp_rw_display_{ver}", None)
+    if p.model in M.INFINITE_FRACTURE_MODELS:
+        state[f"interp_S_total_{system}_{ver}"] = float(p.S + M.fracture_geometric_skin(p))
+        state.pop(f"_interp_skin_display_{ver}", None)
     state[f"interp_boundary_{ver}"] = p.boundary
     if p.model == "horizontal":
         state[f"interp_topbc_{ver}"], state[f"interp_botbc_{ver}"] = p.top_bc, p.bot_bc
@@ -101,6 +107,10 @@ def render(meta):
                    "the working model automatically. Fit to data runs regression separately.")
     p_eng, q_eng, gp = H.engine_view(p, fluid, gas, ds["q_user"])
     dt, pws = np.asarray(ds["dt"], float), np.asarray(ds["pws"], float)
+    if ds.get("qc_source") is not None:
+        st.caption(f"QC applied: {len(dt)} active buildup readings used for diagnostics and fitting. "
+                   "Excluded pressure readings are hidden here; recorded rate events remain unchanged. "
+                   "Inspect or restore originals in Data & QC.")
     pw0 = ds["pwf_shutin"]
     f = lambda a: U.from_field(a, "pressure", system)
     if generate or working:
@@ -126,6 +136,12 @@ def render(meta):
             st.info("Click Generate model to compare the current parameters with the data, or Fit to data to run regression.")
         lf = S.get("last_fit")
         if lf and lf.get("ds") == ds["name"]:
+            try:
+                M.validate_skin(H.params_from_dict(lf["params"]))
+            except ValueError as exc:
+                st.error(f"Cannot plot the saved fit: {exc} Generate and fit a corrected model.")
+                lf = None
+        if lf and lf.get("ds") == ds["name"]:
             pf = H.params_from_dict(lf["params"])
             fit_response = _model_response(pf.to_dict(), lf["q"], lf["tp"], float(dt.min()), float(dt.max()))
             cur = fit_response["diag"]
@@ -140,8 +156,10 @@ def render(meta):
             if show_band:
                 try:
                     with st.spinner("Calculating Monte Carlo response envelope..."):
-                        envelope = _mc_envelope(lf["params"], lf["q"], lf["tp"],
-                                                float(dt.min()), float(dt.max()), mc["samples"])
+                        envelope = mc.get("envelope")
+                        if envelope is None:
+                            envelope = _mc_envelope(lf["params"], lf["q"], lf["tp"],
+                                                    float(dt.min()), float(dt.max()), mc["samples"])
                 except (ValueError, np.linalg.LinAlgError) as exc:
                     st.error(f"Cannot calculate Monte Carlo response envelope: {exc}")
         diagnostic_fig = F.diag_figure(
@@ -155,7 +173,8 @@ def render(meta):
                                   "rgba(194,65,12,0.20)", log=True)
             F.add_percentile_band(pressure_fig, envelope["t"], envelope["pressure"], "pressure", system,
                                   "rgba(34,81,255,0.18)")
-            st.caption(f"Monte Carlo envelope: {envelope['count']} paired parameter sets from Last fit. "
+            origin = "assumed parameter distributions around Last fit" if mc.get("mode") == "parameter_sampling" else "noisy-data refits of Last fit"
+            st.caption(f"Monte Carlo envelope: {envelope['count']} paired parameter sets from {origin}. "
                        "P10/P90 are the 10th/90th numerical percentiles at each time (central 80%); "
                        "P50 is the pointwise median. Not a simultaneous confidence band or a gauge-noise prediction interval. "
                        "Full drawdown is an extrapolation when only buildup was fitted. "
@@ -216,7 +235,7 @@ def render(meta):
         else:
             S["last_fit"] = {"params": pf.to_dict(), "info": info, "ds": ds["name"], "free": free,
                              "q": q_eng, "tp": tp, "fluid": fluid, "q_user": ds["q_user"],
-                             "start_params": p_eng.to_dict()}
+                             "start_params": p_eng.to_dict(), "gas": deepcopy(gas)}
             S["interp_model"] = {"params": pf.to_dict(), "gas": gas}
             S["_interp_pending"] = S["interp_model"]
             S["mc"], S["sens"] = None, None
@@ -234,6 +253,8 @@ def render(meta):
         rows = []
         for n in lf["free"]:
             lab, kind = LABELS[n]
+            if n == "S" and pf.model in M.INFINITE_FRACTURE_MODELS:
+                lab = "Additional fracture skin"
             ci = (lf["info"].get("ci") or {}).get(n)
             row = {"Parameter": lab, "Fitted": _fmt(U.from_field(getattr(pf, n), kind, system)),
                    "Unit": U.label(kind, system)}
@@ -248,8 +269,8 @@ def render(meta):
                    "compare alternative models in tab 04.")
         with st.expander("Uncertainty: sensitivity and Monte Carlo"):
             st.caption("Intervals above are linearised from the regression Jacobian and scaled by the misfit. "
-                       "Sensitivity shows how the curves move when one parameter changes; Monte Carlo refits "
-                       "noisy copies of the fitted model and reports P10 / P50 / P90.")
+                       "Sensitivity changes one parameter at a time. Choose noisy-data refits or "
+                       "propagate bounded parameter distributions without refitting.")
             sens_names = st.multiselect("Parameters for sensitivity", lf["free"], default=lf["free"][:2],
                                         key=f"interp_sens_{ver}_{'_'.join(lf['free'])}")
             s1, s2 = st.columns(2)
@@ -265,15 +286,21 @@ def render(meta):
                                               f"dp and derivative [{pu}]", data={"x": diag["ta"], "dp": f(diag["dp"]), "der": f(diag["der"])},
                                               models=models)
                 st.plotly_chart(fig, use_container_width=True)
-            nmc = s2.number_input("Monte Carlo runs", 5, 60, 15, 5, key=f"interp_nmc_{ver}")
-            if s2.button("Run Monte Carlo", key=f"interp_mcbtn_{ver}"):
-                with st.spinner("Refitting noisy copies..."):
-                    mc = A.monte_carlo(pf, lf["q"], lf["tp"], dt, pws, lf["free"], pwf_shutin=pw0, n=int(nmc))
-                mc["requested"] = int(nmc)
-                S["mc"] = mc
-                st.rerun()
+            mode = st.radio("Monte Carlo method", ["Noisy-data refits", "Parameter distributions (no refitting)"],
+                            key=f"interp_mc_mode_{ver}")
+            if mode == "Parameter distributions (no refitting)":
+                uncertainty.parameter_sampling(pf, fluid, system, ver, lf["free"], lf["q"], lf["tp"], dt)
+            else:
+                nmc = s2.number_input("Monte Carlo runs", 5, 60, 15, 5, key=f"interp_nmc_{ver}")
+                if s2.button("Run Monte Carlo", key=f"interp_mcbtn_{ver}"):
+                    with st.spinner("Refitting noisy copies..."):
+                        mc = A.monte_carlo(pf, lf["q"], lf["tp"], dt, pws, lf["free"], pwf_shutin=pw0, n=int(nmc))
+                    mc["requested"] = int(nmc)
+                    S["mc"] = mc
+                    st.rerun()
             mc = S.get("mc")
             if mc:
+                uncertainty.sampling_results(mc, system)
                 used = min((len(v) for v in mc["samples"].values()), default=0)
                 requested = mc.get("requested", used)
                 if used < requested:
@@ -282,15 +309,19 @@ def render(meta):
                 if used < 3:
                     st.error("At least three Monte Carlo parameter sets are required to show a response envelope.")
             if mc and mc["summary"]:
-                st.dataframe(pd.DataFrame([{"Parameter": LABELS[n][0], "P10": _fmt(U.from_field(v["p10"], LABELS[n][1], system)),
-                                            "P50": _fmt(U.from_field(v["p50"], LABELS[n][1], system)),
-                                            "P90": _fmt(U.from_field(v["p90"], LABELS[n][1], system)), "runs": v["n"]}
-                                           for n, v in mc["summary"].items() if n in LABELS]),
+                summary_specs = {s[0]: (s[1], s[2]) for s in H.BASE_SPEC +
+                                 H.MODEL_SPEC.get(pf.model, []) + H.BOUNDARY_SPEC.get(pf.boundary, [])}
+                st.dataframe(pd.DataFrame([{"Parameter": summary_specs[n][0],
+                                            "Unit": U.label(summary_specs[n][1], system),
+                                            **{key.upper(): _fmt(U.from_field(v[key], summary_specs[n][1], system))
+                                               for key in ("p10", "p50", "p90")}, "runs": v["n"]}
+                                           for n, v in mc["summary"].items() if n in summary_specs]),
                              hide_index=True, use_container_width=True)
         n1, n2 = st.columns([2, 1])
         name = n1.text_input("Name for this interpretation", value=f"{H.MODEL_LABELS[pf.model]} / {H.BOUNDARY_LABELS[pf.boundary]}",
                              key=f"interp_name_{ver}")
         if n2.button("Save to Compare"):
-            S["fits"].append({"name": name, "params": lf["params"], "rms": lf["info"]["rms"], "q": lf["q"],
-                              "tp": lf["tp"], "ds": ds["name"]})
+            S["fits"].append({"name": name, "params": deepcopy(lf["params"]), "rms": lf["info"]["rms"], "q": lf["q"],
+                              "tp": lf["tp"], "ds": ds["name"], "fluid": fluid,
+                              "gas": deepcopy(lf.get("gas", ds.get("gas")))})
             st.success("Saved.")

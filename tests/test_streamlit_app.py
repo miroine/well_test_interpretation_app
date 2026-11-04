@@ -306,7 +306,7 @@ class StreamlitJourneys(unittest.TestCase):
         with patch.object(st, "file_uploader", side_effect=upload):
             app = AppTest.from_function(qc_test_app).run()
             app.radio(key="qc_test_units").set_value("Metric")
-            app.radio(key="data_src_0").set_value("Upload CSV")
+            app.radio(key="data_src_0").set_value("Upload files")
             self.check_run(app)
             app.checkbox(key="qc_upload_full").check()
             self.check_run(app)
@@ -453,10 +453,8 @@ class StreamlitJourneys(unittest.TestCase):
             self.assertAlmostEqual(app.number_input(key="design_deck_half_extent_ft_Field").value, 6000)
             self.assertFalse(any(d.key == "design_deck_data" for d in app.get("download_button")))
 
-    def test_multifracture_design_reuses_curves_and_defers_animation(self):
+    def test_multifracture_design_avoids_shared_cache_and_defers_animation(self):
         app = self.app()
-        tab_design._designed_test.clear()
-        tab_animation._payload.clear()
         app.selectbox(key="design_model_0").select("mfhw")
         with patch.object(viz, "model_curves", wraps=viz.model_curves) as curves, \
              patch.object(viz, "animation_payload", wraps=viz.animation_payload) as animation:
@@ -465,16 +463,16 @@ class StreamlitJourneys(unittest.TestCase):
             animation.assert_not_called()
             app.checkbox(key="design_overlay_Drawdown_pressure change").uncheck()
             self.check_run(app)
-            self.assertEqual(curves.call_count, 1)
+            self.assertEqual(curves.call_count, 2)
             animation.assert_not_called()
             app.number_input(key="design_tp_0").set_value(72.0)
             self.check_run(app)
-            self.assertEqual(curves.call_count, 2)
+            self.assertEqual(curves.call_count, 3)
             app.session_state["active_tab"] = "Buildup animation"
             self.check_run(app)
             self.assertEqual(animation.call_count, 1)
             self.assertEqual(animation.call_args.args[2], 72.0)
-            self.assertEqual(curves.call_count, 2)
+            self.assertEqual(curves.call_count, 4)
             app.session_state["active_tab"] = "00 Test design"
             self.check_run(app)
             self.assertEqual(animation.call_count, 1)
